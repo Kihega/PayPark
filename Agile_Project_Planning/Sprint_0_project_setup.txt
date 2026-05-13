@@ -1,0 +1,152 @@
+# Sprint 0 — Project Setup, Infrastructure & CI/CD
+
+**Duration**: Week 1 (5 working days)
+**Goal**: Zero-feature sprint. Establish all foundations so every subsequent sprint
+can begin immediately with development — no infrastructure blockers.
+
+---
+
+## Sprint Goal
+> "All developers can clone the repo, run the project locally with one command,
+> and deploy to staging with a single git push."
+
+---
+
+## User Stories & Tasks
+
+### US-000 | Repository & Version Control
+**As a** developer,
+**I want** a well-structured GitHub repository with branch protection,
+**So that** the team follows consistent Git workflows from day one.
+
+**Acceptance Criteria:**
+- [ ] GitHub repo `parkipay` created (organization or personal)
+- [ ] `main` branch protected (requires PR + 1 reviewer)
+- [ ] Branch naming convention documented: `feature/`, `fix/`, `chore/`
+- [ ] `.gitignore` covers Python, Node, Expo, Docker, OS files
+- [ ] Initial project structure committed and pushed
+
+**Tasks:**
+- [ ] Create GitHub repo and set visibility (private)
+- [ ] Configure branch protection rules on `main`
+- [ ] Create `dev`, `staging` branches
+- [ ] Add all team members as collaborators
+- [ ] Write initial `README.md`
+
+---
+
+### US-001 | Backend Environment Setup
+**As a** backend developer,
+**I want** a fully Dockerized Django project connected to Supabase PostgreSQL,
+**So that** local development matches production exactly.
+
+**Acceptance Criteria:**
+- [ ] Django project initialized (`parkipay_backend/`)
+- [ ] `docker-compose.yml` runs Django + Redis with one command
+- [ ] `.env.example` documents all required environment variables
+- [ ] Django connects to Supabase PostgreSQL in both local and staging
+- [ ] `python manage.py migrate` runs clean with zero errors
+- [ ] Health check endpoint `GET /api/health/` returns `{"status": "ok"}`
+
+**Tasks:**
+- [ ] `django-admin startproject core .`
+- [ ] Install: `djangorestframework`, `psycopg2-binary`, `python-decouple`,
+      `djangorestframework-simplejwt`, `celery`, `redis`, `django-cors-headers`
+- [ ] Configure `settings/base.py`, `settings/local.py`, `settings/production.py`
+- [ ] Write `Dockerfile` (Python 3.12, non-root user)
+- [ ] Write `docker-compose.yml` (Django + Redis services)
+- [ ] Set up Supabase project, get connection string
+- [ ] Create `.env.example` with all keys documented
+- [ ] Write `entrypoint.sh` (migrate + collectstatic + gunicorn)
+
+---
+
+### US-002 | Frontend Environment Setup
+**As a** mobile developer,
+**I want** an Expo React Native project scaffolded and runnable,
+**So that** I can immediately start building screens.
+
+**Acceptance Criteria:**
+- [ ] Expo project initialized (`parkipay_app/`)
+- [ ] Expo Router configured for file-based navigation
+- [ ] Axios/React Query set up with base API URL from `.env`
+- [ ] App runs on Android emulator and Expo Go without errors
+- [ ] Folder structure matches agreed conventions
+
+**Tasks:**
+- [ ] `npx create-expo-app parkipay_app --template`
+- [ ] Install: `expo-router`, `@tanstack/react-query`, `axios`,
+      `zustand`, `react-native-paper`, `expo-secure-store`
+- [ ] Create folder structure:
+      ```
+      app/         # Expo Router screens
+      components/  # Reusable UI components
+      hooks/       # Custom React hooks
+      services/    # API service layer
+      store/       # Zustand stores
+      utils/       # Helper functions
+      constants/   # Colors, URLs, enums
+      ```
+- [ ] Set up `constants/api.ts` with base URL from `APP_ENV`
+- [ ] Create placeholder `(auth)/login.tsx` and `(app)/home.tsx` screens
+
+---
+
+### US-003 | CI/CD Pipeline
+**As a** team,
+**I want** automated tests to run on every pull request,
+**So that** broken code never reaches `main`.
+
+**Acceptance Criteria:**
+- [ ] GitHub Actions workflow runs Django tests on every PR to `main`
+- [ ] Render auto-deploys backend on merge to `main`
+- [ ] Lint check (flake8 + ESLint) runs on every PR
+- [ ] Secrets are stored in GitHub Actions secrets, never in code
+
+**Tasks:**
+- [ ] Write `.github/workflows/backend-ci.yml` (pytest, flake8)
+- [ ] Write `.github/workflows/frontend-ci.yml` (eslint, tsc --noEmit)
+- [ ] Connect Render service to GitHub repo (auto-deploy on push)
+- [ ] Add `SUPABASE_URL`, `SECRET_KEY`, etc. to Render env vars
+- [ ] Add same secrets to GitHub Actions secrets
+
+---
+
+### US-004 | Render Deployment
+**As a** team,
+**I want** the backend deployed to Render (staging),
+**So that** the mobile app has a real API URL to point to during development.
+
+**Acceptance Criteria:**
+- [ ] Backend live at `https://parkipay-api.onrender.com/api/health/`
+- [ ] Environment variables set on Render dashboard
+- [ ] PostgreSQL connection to Supabase verified from Render
+- [ ] CORS configured to allow Expo dev and production origins
+
+**Tasks:**
+- [ ] Create Render Web Service connected to GitHub repo
+- [ ] Set `BUILD_COMMAND` and `START_COMMAND` on Render
+- [ ] Test health endpoint from Postman
+- [ ] Create Postman collection `ParkiPay API` with base URL variable
+
+---
+
+## Sprint 0 Deliverables Checklist
+
+- [ ] GitHub repo live with branch protection
+- [ ] Django backend running in Docker locally
+- [ ] Expo app running on Android emulator
+- [ ] Backend deployed to Render staging
+- [ ] CI/CD pipelines passing green
+- [ ] Postman collection created
+- [ ] Team onboarded (all devs can run locally)
+
+---
+
+## Notes & Risks
+
+| Risk                                      | Mitigation                               |
+|-------------------------------------------|------------------------------------------|
+| Supabase connection issues from Render    | Use connection pooling (port 6543)       |
+| Expo version incompatibilities            | Pin all package versions in package.json |
+| Render cold start latency                 | Acceptable for staging; optimize in S6   |

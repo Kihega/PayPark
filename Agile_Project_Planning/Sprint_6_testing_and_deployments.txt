@@ -1,0 +1,227 @@
+# Sprint 6 — Testing, Security Audit & Production Deployment
+
+**Duration**: Week 11–12 (10 working days)
+**Goal**: The system is production-ready, secure, fully tested, and deployed
+to Render with Supabase PostgreSQL. APK/TestFlight build ready for distribution.
+
+---
+
+## Sprint Goal
+> "ParkiPay passes security review, all critical paths have test coverage,
+> the production backend is live, and officers can install the app and go live."
+
+---
+
+## User Stories
+
+### US-601 | Full Test Suite & Coverage Report
+**As a** development team,
+**I want** comprehensive automated tests covering all critical paths,
+**So that** we can deploy with confidence and catch regressions quickly.
+
+**Acceptance Criteria:**
+- [ ] Backend test coverage ≥ 80% overall (measured with `coverage.py`)
+- [ ] All API endpoints have integration tests (happy path + error cases)
+- [ ] Critical paths have 100% test coverage:
+      — Login / lockout
+      — Plate lookup (valid, invalid, bad format)
+      — Control number generation (new, duplicate, post-expiry)
+      — Expiry background task
+      — SMS dispatch (mock Africa's Talking)
+- [ ] All tests pass on CI (GitHub Actions)
+- [ ] Frontend: key user flows tested with Jest + React Native Testing Library
+
+**Tasks:**
+- [ ] Run `coverage run manage.py test && coverage report`
+- [ ] Identify and fill gaps to reach 80% threshold
+- [ ] Write integration tests using `APITestCase` for all endpoints
+- [ ] Mock Africa's Talking and SendGrid in tests (no real API calls)
+- [ ] Write E2E test for full flow: login → plate lookup → generate bill → history
+- [ ] Frontend: test `LoginForm`, `PlateInput`, `VehicleCard`, `BillHistoryCard`
+- [ ] Generate and commit HTML coverage report to `docs/coverage/`
+
+---
+
+### US-602 | Security Audit & Hardening
+**As a** government IT team,
+**I want** the system reviewed against common vulnerabilities,
+**So that** officer credentials and citizen data are protected.
+
+**Acceptance Criteria:**
+- [ ] No hardcoded secrets in codebase (verified by `git log` and `trufflesecurity/trufflehog`)
+- [ ] All endpoints require authentication (no accidentally public routes)
+- [ ] SQL injection: all queries use Django ORM (no raw SQL with user input)
+- [ ] Rate limiting applied to: login (5/min), plate lookup (30/min), generate (10/min)
+- [ ] CORS restricted to known origins only (Expo app + admin domain)
+- [ ] Django `DEBUG = False` in production
+- [ ] `SECRET_KEY` is ≥ 50 chars random value from environment
+- [ ] Supabase RLS policies verified on all tables
+- [ ] HTTPS enforced (redirect HTTP → HTTPS on Render)
+
+**Tasks:**
+- [ ] Run `bandit -r .` (Python security linter) — fix all HIGH severity issues
+- [ ] Install `django-ratelimit` and apply to sensitive views
+- [ ] Audit all `urlpatterns` — verify every view has `IsAuthenticated`
+- [ ] Verify no raw SQL with user input (grep for `.raw(`, `cursor.execute(`)
+- [ ] Set `ALLOWED_HOSTS` to Render domain only
+- [ ] Set `SECURE_SSL_REDIRECT = True`, `SESSION_COOKIE_SECURE = True`
+- [ ] Verify Supabase RLS is ON for all tables
+- [ ] Run TruffleHog on full git history to scan for leaked secrets
+- [ ] Document security decisions in `docs/security.md`
+
+---
+
+### US-603 | Production Environment Setup
+**As a** DevOps engineer,
+**I want** the production environment configured and stable on Render + Supabase,
+**So that** the system is reliable for field officers when they go live.
+
+**Acceptance Criteria:**
+- [ ] Production Django backend live at `https://api.parkipay.go.tz/` (or Render URL)
+- [ ] Supabase production database separate from staging
+- [ ] All environment variables set in Render production environment
+- [ ] Celery worker running as separate Render service
+- [ ] Health check endpoint returns 200 from Render health check
+- [ ] Auto-deploy from `main` branch enabled
+- [ ] Database migrations run automatically on deploy (`release_command`)
+
+**Tasks:**
+- [ ] Create production Supabase project (separate from staging)
+- [ ] Run full migration on production DB: `python manage.py migrate`
+- [ ] Seed parking locations and initial admin officer accounts
+- [ ] Create production Render Web Service (Django)
+- [ ] Create production Render Background Worker (Celery)
+- [ ] Create production Render Scheduler (Celery Beat)
+- [ ] Set all production env vars on Render dashboard
+- [ ] Configure `release_command: python manage.py migrate` on Render
+- [ ] Verify health check endpoint from external URL
+- [ ] Set up Sentry project and add `SENTRY_DSN` to env vars
+- [ ] Perform load test: simulate 50 concurrent plate lookups
+
+---
+
+### US-604 | Africa's Talking Production SMS Testing
+**As a** product owner,
+**I want** real SMS messages tested with a production Africa's Talking account
+before go-live,
+**So that** officers and car owners receive messages reliably from day one.
+
+**Acceptance Criteria:**
+- [ ] Production AT account registered with Tanzania Tanzanian short code or sender ID
+- [ ] 10 real SMS messages sent and received in testing
+- [ ] SMS delivery report confirms ≥ 95% delivery rate
+- [ ] SMS content reviewed and approved by government stakeholder
+- [ ] Fallback sender ID configured if primary is rejected
+
+**Tasks:**
+- [ ] Register Africa's Talking production account
+- [ ] Apply for Tanzanian alphanumeric sender ID "PARKIPAY"
+- [ ] Update `AT_API_KEY` and `AT_USERNAME` in production env vars
+- [ ] Test SMS to 10 different Tanzanian numbers (Vodacom, Airtel, Tigo, Halotel)
+- [ ] Review delivery reports in AT dashboard
+- [ ] Final content approval from product owner
+
+---
+
+### US-605 | Mobile App Build & Distribution
+**As a** field officer,
+**I want** to install the ParkiPay app on my government Android device,
+**So that** I can start using it on my first shift.
+
+**Acceptance Criteria:**
+- [ ] APK (Android) built pointing to production API URL
+- [ ] APK tested on minimum supported device (Android 10, 2GB RAM)
+- [ ] App version shown in profile screen (e.g. v1.0.0)
+- [ ] App name "ParkiPay" with official icon visible on home screen
+- [ ] Internal distribution method documented (direct APK, MDM, or Play Store internal)
+- [ ] OTA (Over-the-Air) updates configured via Expo Updates for quick patches
+
+**Tasks:**
+- [ ] Set production `APP_API_URL` in Expo environment config
+- [ ] Create ParkiPay app icon (1024x1024 PNG) and splash screen
+- [ ] Run `eas build --platform android --profile production`
+- [ ] Test APK on real Android device (minimum spec)
+- [ ] Configure `expo-updates` with production URL
+- [ ] Write officer onboarding guide: `docs/officer_onboarding.pdf`
+- [ ] Create 5-minute officer training video (screen recording)
+
+---
+
+### US-606 | Go-Live Checklist & Documentation
+**As a** project team,
+**I want** complete documentation and a go-live checklist,
+**So that** handover to the government IT team is smooth and maintainable.
+
+**Acceptance Criteria:**
+- [ ] API documentation complete (Postman collection exported + README)
+- [ ] System architecture diagram (draw.io or Mermaid)
+- [ ] Environment setup guide for new developers
+- [ ] Operations runbook: how to restart services, check logs, resend failed SMS
+- [ ] Officer onboarding guide (step-by-step with screenshots)
+- [ ] Admin portal user guide for supervisors
+
+**Tasks:**
+- [ ] Export Postman collection as `docs/api/parkipay_api.json`
+- [ ] Draw architecture diagram → `docs/architecture.png`
+- [ ] Write `docs/SETUP.md` (dev environment from scratch)
+- [ ] Write `docs/OPERATIONS.md` (Render logs, Celery monitoring, Supabase)
+- [ ] Write `docs/OFFICER_GUIDE.md` with screenshots of every screen
+- [ ] Write `docs/ADMIN_GUIDE.md` for supervisors using Django Admin
+
+---
+
+## Sprint 6 Deliverables
+
+- [ ] ≥ 80% backend test coverage report
+- [ ] Security audit completed — all HIGH issues resolved
+- [ ] Production backend live on Render
+- [ ] Production Celery worker and Beat live
+- [ ] Supabase production database migrated and seeded
+- [ ] Real SMS delivery confirmed via Africa's Talking production
+- [ ] Android APK built, tested, and ready for distribution
+- [ ] Complete documentation package delivered
+- [ ] Sentry error monitoring live
+
+---
+
+## Go-Live Readiness Checklist
+
+  BACKEND
+  ☐ All tests passing on CI
+  ☐ Security audit complete (bandit, TruffleHog)
+  ☐ Production environment variables set
+  ☐ Database migrated and seeded
+  ☐ Health check returns 200
+  ☐ Sentry connected and receiving events
+  ☐ Rate limiting active
+  ☐ HTTPS enforced
+
+  NOTIFICATIONS
+  ☐ Africa's Talking production account active
+  ☐ Sender ID approved
+  ☐ 10 test SMS delivered successfully
+  ☐ SendGrid production API key set
+
+  MOBILE
+  ☐ APK built with production API URL
+  ☐ App tested on Android 10 device
+  ☐ Version number set (1.0.0)
+  ☐ Expo OTA updates configured
+  ☐ Officer onboarding guide ready
+
+  OPERATIONS
+  ☐ Render auto-deploy enabled
+  ☐ Celery worker healthy
+  ☐ Admin accounts created for supervisors
+  ☐ Backup strategy documented (Supabase automated backups enabled)
+
+---
+
+## Notes & Risks
+
+| Risk                                         | Mitigation                                      |
+|----------------------------------------------|-------------------------------------------------|
+| Africa's Talking sender ID approval delayed  | Use sandbox number as fallback during soft launch |
+| Render cold start on first request           | Render paid plan (no cold starts) or keep-alive |
+| Officers' Android devices vary widely        | Test on Android 10, 11, 12; document min spec   |
+| Government IT team capacity for maintenance  | Comprehensive ops runbook + training session     |
