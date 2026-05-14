@@ -3,9 +3,9 @@
     Mobile Application for Fair Fee Collection in Government
               Parking Areas in Tanzania
 ================================================================================
-Document Version : 1.0
+Document Version : 1.1
 Date             : May 2026
-Prepared By      : ParkiPay Development Team
+Prepared By      : Benta
 Classification   : Internal / Government Use
 ================================================================================
 
@@ -21,6 +21,18 @@ a process widely associated with revenue leakage, corruption, and lack of
 accountability — and replaces it with a transparent, traceable, and auditable
 digital workflow.
 
+At the heart of ParkiPay is a global duplicate-bill prevention engine. In the
+current manual system, multiple field officers can independently spot the same
+parked vehicle and each issue a separate bill — resulting in a single car owner
+being charged two, three, or more times within the same parking session. This
+is both unfair to citizens and damaging to public trust in government services.
+ParkiPay solves this by enforcing a system-wide rule: only one ACTIVE control
+number can exist per plate number at any given time, regardless of how many
+officers scan that plate. Any officer who attempts to generate a bill for an
+already-billed vehicle is immediately shown the existing control number, the
+officer who issued it, and its expiry time — and is blocked from creating a
+duplicate.
+
 Field officers use the mobile app to verify vehicle plate numbers, generate
 unique billing control numbers, and automatically notify car owners via SMS
 (and email where available). All transactions are stored centrally for permanent
@@ -31,23 +43,20 @@ government records and daily reporting.
 2. PROBLEM STATEMENT
 ────────────────────────────────────────────────────────────────────────────────
 
-Public and government parking areas in Tanzania currently rely heavily on
-manual fee collection. This results in:
+Public and government parking areas in Tanzania currently use digitall way of collecting fee but with , duplication in xreating customer bills. This results in:
 
-  a) Revenue Leakage       — Collected cash rarely matches actual parking
-                             volumes; government loses significant daily revenue.
+  a) Duplicate Billing of Car Owners — The most critical fairness issue:
+                             multiple field officers working the same parking
+                             area can each independently spot and bill the same
+                             vehicle. With no shared system to check whether a
+                             bill already exists, a single car owner can receive
+                             two or more separate bills within one parking
+                             session — one from each officer who scanned their
+                             plate. This is unjust to citizens and undermines
+                             public confidence in government parking services.
 
-  b) Corruption Risk       — Field officers handling cash without receipts
-                             or auditable records creates room for fraud.
-
-  c) No Vehicle Traceability — No system links parking fees to specific
-                               vehicles or owners, making disputes unresolvable.
-
-  d) Inefficient Reporting  — Daily summaries are handwritten, error-prone,
-                              and not accessible to central authorities in
-                              real time.
-
-  e) Lack of Car Owner Awareness — Owners are billed informally with no
+  
+  b) Lack of Car Owner Awareness — Owners are billed informally with no
                                     official documentation or digital receipt.
 
 
@@ -60,22 +69,38 @@ ParkiPay is a mobile-first system consisting of:
   [A] Field Officer Mobile App (React Native + Expo)
       — Used exclusively by authorized government parking field officers.
       — Plate number lookup integrated with the national vehicle registry.
+      — Before generating any bill, the app checks system-wide for an
+        existing ACTIVE control number on that plate — across all officers.
+      — If an active bill exists (from any officer), a warning is shown
+        and no new bill can be created until the existing one expires.
       — One-tap control number generation with automatic owner notification.
       — Daily billing history visible to officers in-app.
 
-  [B] Backend REST API (Django REST Framework)
+  [B] Global Duplicate Prevention Engine (Backend)
+      — The central enforcement layer that guarantees only one ACTIVE
+        control number exists per plate number at any given time.
+      — Every bill generation request is checked against the full database
+        — not just the requesting officer's records — before proceeding.
+      — Returns the existing bill details (control number, issuing officer,
+        expiry time) when a duplicate attempt is detected.
+      — All duplicate attempts are logged to the audit trail for supervisor
+        review and anomaly detection.
+
+  [C] Backend REST API (Django REST Framework)
       — Handles vehicle lookup, control number generation, expiry logic,
         SMS/email dispatch, and officer authentication.
       — Deployed via Docker on Render for scalability and portability.
 
-  [C] Central Database (PostgreSQL on Supabase)
+  [D] Central Database (PostgreSQL on Supabase)
       — Permanent, cloud-hosted record of every billing event.
+      — Single source of truth for active bill status across all officers
+        and all locations simultaneously.
       — Supports government audit queries, monthly reports, and analytics.
 
-  [D] Notification Layer (Africa's Talking SMS Gateway)
+  [E] Notification Layer (Africa's Talking SMS Gateway)
       — Sends official billing messages to vehicle owners at the moment a
         control number is generated.
-      — Email notifications dispatched where owner email is registered.
+      — Email notifications dispatched where owner email is registered.(using Resend)
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -87,7 +112,7 @@ ParkiPay is a mobile-first system consisting of:
       • Officers log in with government-issued credentials (employee ID +
         password) secured with JWT token-based authentication.
       • Role-based access: Field Officer, Supervisor, Admin.
-      • Session management with token refresh and remote logout capability.
+      • Session management with token refresh and remote logout capability(rediss).
 
   4.2 VEHICLE PLATE NUMBER VERIFICATION
       ────────────────────────────────────
@@ -99,20 +124,31 @@ ParkiPay is a mobile-first system consisting of:
       • If plate is invalid or unregistered, a clear error message is shown
         and no control number can be generated.
 
-  4.3 CONTROL NUMBER GENERATION
-      ────────────────────────────
+  4.3 CONTROL NUMBER GENERATION & DUPLICATE PREVENTION
+      ────────────────────────────────────────────────────
       • Upon successful plate verification, the officer taps "Generate Bill."
-      • System generates a unique, sequential control number tied to:
-            — Plate number
-            — Officer ID
-            — Parking location
-            — Timestamp
-            — Parking fee amount (based on location/vehicle category)
+      • Before creating any new bill, the system performs a GLOBAL check
+        across the entire database for any ACTIVE control number tied to
+        that plate number — regardless of which officer or location issued it.
+      • If an ACTIVE control number already exists (issued by any officer):
+            — Generation is BLOCKED. No new bill is created.
+            — The officer sees a clear warning screen displaying:
+                * The existing control number
+                * The officer who originally issued it
+                * The time it was issued
+                * Exact expiry time (when a new bill may be generated)
+            — The duplicate attempt is recorded in the audit log.
+      • If NO active control number exists for the plate:
+            — A new unique control number is generated, tied to:
+                * Plate number
+                * Issuing officer ID
+                * Parking location
+                * Timestamp
+                * Parking fee amount (based on location/vehicle category)
       • Control number is valid for exactly 5 hours from generation.
-      • If an active (non-expired) control number exists for a plate, the
-        system displays a warning: "An active control number already exists
-        for this vehicle. It expires at [TIME]. No new bill can be generated."
-      • After expiry, a new control number can be generated normally.
+      • After expiry, any officer may generate a new control number for
+        the same plate number through the normal flow.
+      • Expiry status is always enforced server-side — no client override.
 
   4.4 OWNER NOTIFICATION
       ─────────────────────
@@ -144,16 +180,16 @@ ParkiPay is a mobile-first system consisting of:
             — View all bills by date, location, officer, or plate number.
             — Export reports (CSV / PDF).
             — Monitor officer activity in real time.
-            — Flag anomalies (e.g., excessive re-billing attempts).
+   — Flag anomalies (e.g., excessive re-billing attempts).
 
   4.7 CONTROL NUMBER EXPIRY ENFORCEMENT
       ──────────────────────────────────
       • Backend checks expiry at every control number generation request.
-      • A background task (Celery or Django-Q) marks expired control numbers
+      • A background task (Celery) marks expired control numbers
         automatically to keep the database state consistent.
       • Expiry status is always computed server-side — client cannot override.
 
-
+ 
 ────────────────────────────────────────────────────────────────────────────────
 5. TECHNICAL ARCHITECTURE
 ────────────────────────────────────────────────────────────────────────────────
@@ -181,8 +217,8 @@ ParkiPay is a mobile-first system consisting of:
 
   External Integrations:
   ├── Africa's Talking — SMS Gateway (primary)
-  ├── SendGrid / SMTP  — Email notifications
-  └── BRELA / SUMATRA  — Vehicle registry (national integration, Phase 2)
+  ├── Resend / SMTP  — Email notifications
+  └── BRELA / SUMATRA  — Vehicle registry (national integration, Phase 2)---(For now we will assume to have plate number already fetched and stored in db)
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -297,8 +333,10 @@ ParkiPay is a mobile-first system consisting of:
 11. SUCCESS METRICS
 ────────────────────────────────────────────────────────────────────────────────
 
+  • Zero duplicate active control numbers for the same vehicle at any time,
+    across all officers and all locations — guaranteed by server-side enforcement.
+  • 100% of blocked duplicate attempts logged and visible to supervisors.
   • 100% of generated bills traceable by plate number, officer, and timestamp.
-  • Zero duplicate active control numbers for the same vehicle.
   • SMS delivery rate ≥ 95% via Africa's Talking gateway.
   • App works reliably on Android devices running Android 10+.
   • System uptime ≥ 99.5% on Render deployment.
@@ -321,5 +359,5 @@ ParkiPay is a mobile-first system consisting of:
 
 
 ================================================================================
-END OF DOCUMENT — ParkiPay Project Proposal v1.0
+END OF DOCUMENT — ParkiPay Project Proposal v1.1
 ================================================================================
