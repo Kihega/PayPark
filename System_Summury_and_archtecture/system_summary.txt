@@ -1,0 +1,363 @@
+================================================================================
+          PROJECT PROPOSAL & SUMMARY — PARKIPAY
+    Mobile Application for Fair Fee Collection in Government
+              Parking Areas in Tanzania
+================================================================================
+Document Version : 1.1
+Date             : May 2026
+Prepared By      : Benta
+Classification   : Internal / Government Use
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. EXECUTIVE SUMMARY
+────────────────────────────────────────────────────────────────────────────────
+
+ParkiPay is a government-grade mobile application designed to digitize and
+standardize parking fee collection across public and government-owned parking
+areas in Tanzania. The system eliminates manual, cash-only fee collection —
+a process widely associated with revenue leakage, corruption, and lack of
+accountability — and replaces it with a transparent, traceable, and auditable
+digital workflow.
+
+At the heart of ParkiPay is a global duplicate-bill prevention engine. In the
+current manual system, multiple field officers can independently spot the same
+parked vehicle and each issue a separate bill — resulting in a single car owner
+being charged two, three, or more times within the same parking session. This
+is both unfair to citizens and damaging to public trust in government services.
+ParkiPay solves this by enforcing a system-wide rule: only one ACTIVE control
+number can exist per plate number at any given time, regardless of how many
+officers scan that plate. Any officer who attempts to generate a bill for an
+already-billed vehicle is immediately shown the existing control number, the
+officer who issued it, and its expiry time — and is blocked from creating a
+duplicate.
+
+Field officers use the mobile app to verify vehicle plate numbers, generate
+unique billing control numbers, and automatically notify car owners via SMS
+(and email where available). All transactions are stored centrally for permanent
+government records and daily reporting.
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. PROBLEM STATEMENT
+────────────────────────────────────────────────────────────────────────────────
+
+Public and government parking areas in Tanzania currently use digitall way of collecting fee but with , duplication in xreating customer bills. This results in:
+
+  a) Duplicate Billing of Car Owners — The most critical fairness issue:
+                             multiple field officers working the same parking
+                             area can each independently spot and bill the same
+                             vehicle. With no shared system to check whether a
+                             bill already exists, a single car owner can receive
+                             two or more separate bills within one parking
+                             session — one from each officer who scanned their
+                             plate. This is unjust to citizens and undermines
+                             public confidence in government parking services.
+
+  
+  b) Lack of Car Owner Awareness — Owners are billed informally with no
+                                    official documentation or digital receipt.
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. PROPOSED SOLUTION
+────────────────────────────────────────────────────────────────────────────────
+
+ParkiPay is a mobile-first system consisting of:
+
+  [A] Field Officer Mobile App (React Native + Expo)
+      — Used exclusively by authorized government parking field officers.
+      — Plate number lookup integrated with the national vehicle registry.
+      — Before generating any bill, the app checks system-wide for an
+        existing ACTIVE control number on that plate — across all officers.
+      — If an active bill exists (from any officer), a warning is shown
+        and no new bill can be created until the existing one expires.
+      — One-tap control number generation with automatic owner notification.
+      — Daily billing history visible to officers in-app.
+
+  [B] Global Duplicate Prevention Engine (Backend)
+      — The central enforcement layer that guarantees only one ACTIVE
+        control number exists per plate number at any given time.
+      — Every bill generation request is checked against the full database
+        — not just the requesting officer's records — before proceeding.
+      — Returns the existing bill details (control number, issuing officer,
+        expiry time) when a duplicate attempt is detected.
+      — All duplicate attempts are logged to the audit trail for supervisor
+        review and anomaly detection.
+
+  [C] Backend REST API (Django REST Framework)
+      — Handles vehicle lookup, control number generation, expiry logic,
+        SMS/email dispatch, and officer authentication.
+      — Deployed via Docker on Render for scalability and portability.
+
+  [D] Central Database (PostgreSQL on Supabase)
+      — Permanent, cloud-hosted record of every billing event.
+      — Single source of truth for active bill status across all officers
+        and all locations simultaneously.
+      — Supports government audit queries, monthly reports, and analytics.
+
+  [E] Notification Layer (Africa's Talking SMS Gateway)
+      — Sends official billing messages to vehicle owners at the moment a
+        control number is generated.
+      — Email notifications dispatched where owner email is registered.(using Resend)
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. CORE FEATURES & FUNCTIONAL REQUIREMENTS
+────────────────────────────────────────────────────────────────────────────────
+
+  4.1 OFFICER AUTHENTICATION
+      ─────────────────────────
+      • Officers log in with government-issued credentials (employee ID +
+        password) secured with JWT token-based authentication.
+      • Role-based access: Field Officer, Supervisor, Admin.
+      • Session management with token refresh and remote logout capability(rediss).
+
+  4.2 VEHICLE PLATE NUMBER VERIFICATION
+      ────────────────────────────────────
+      • Officer enters or scans a vehicle plate number in the app.
+      • System queries the vehicle registry database (national integration
+        or seeded government dataset) to validate the plate.
+      • Returns: Vehicle owner name, phone number, email (if registered),
+        vehicle make/model/color, and registration status.
+      • If plate is invalid or unregistered, a clear error message is shown
+        and no control number can be generated.
+
+  4.3 CONTROL NUMBER GENERATION & DUPLICATE PREVENTION
+      ────────────────────────────────────────────────────
+      • Upon successful plate verification, the officer taps "Generate Bill."
+      • Before creating any new bill, the system performs a GLOBAL check
+        across the entire database for any ACTIVE control number tied to
+        that plate number — regardless of which officer or location issued it.
+      • If an ACTIVE control number already exists (issued by any officer):
+            — Generation is BLOCKED. No new bill is created.
+            — The officer sees a clear warning screen displaying:
+                * The existing control number
+                * The officer who originally issued it
+                * The time it was issued
+                * Exact expiry time (when a new bill may be generated)
+            — The duplicate attempt is recorded in the audit log.
+      • If NO active control number exists for the plate:
+            — A new unique control number is generated, tied to:
+                * Plate number
+                * Issuing officer ID
+                * Parking location
+                * Timestamp
+                * Parking fee amount (based on location/vehicle category)
+      • Control number is valid for exactly 5 hours from generation.
+      • After expiry, any officer may generate a new control number for
+        the same plate number through the normal flow.
+      • Expiry status is always enforced server-side — no client override.
+
+  4.4 OWNER NOTIFICATION
+      ─────────────────────
+      • Immediately upon control number generation, the system:
+            — Sends an SMS to the registered owner phone number containing:
+                * Control Number
+                * Amount Due
+                * Payment Deadline (5 hours from generation)
+                * Parking Location
+                * Officer Reference
+            — Sends an email (if available) with the same details plus a
+              formatted digital receipt.
+
+  4.5 BILLING HISTORY (Officer Daily View)
+      ──────────────────────────────────────
+      • Officers can view a scrollable list of all bills generated during
+        the current shift/day, showing:
+            — Plate number
+            — Control number
+            — Timestamp
+            — Status (Active / Expired / Paid)
+      • History resets per day but all records are permanently stored in
+        the central database.
+
+  4.6 CENTRAL DATABASE & ADMIN PORTAL
+      ────────────────────────────────
+      • All billing events are stored permanently in PostgreSQL (Supabase).
+      • Admin dashboard (web) allows supervisors to:
+            — View all bills by date, location, officer, or plate number.
+            — Export reports (CSV / PDF).
+            — Monitor officer activity in real time.
+   — Flag anomalies (e.g., excessive re-billing attempts).
+
+  4.7 CONTROL NUMBER EXPIRY ENFORCEMENT
+      ──────────────────────────────────
+      • Backend checks expiry at every control number generation request.
+      • A background task (Celery) marks expired control numbers
+        automatically to keep the database state consistent.
+      • Expiry status is always computed server-side — client cannot override.
+
+ 
+────────────────────────────────────────────────────────────────────────────────
+5. TECHNICAL ARCHITECTURE
+────────────────────────────────────────────────────────────────────────────────
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   FIELD OFFICER DEVICE                      │
+  │            React Native + Expo (Android / iOS)              │
+  └────────────────────┬────────────────────────────────────────┘
+                       │ HTTPS REST API (JWT Auth)
+  ┌────────────────────▼────────────────────────────────────────┐
+  │                BACKEND — Django REST Framework               │
+  │           Dockerized · Deployed on Render                    │
+  │                                                              │
+  │  ┌──────────────┐  ┌───────────────┐  ┌──────────────────┐  │
+  │  │  Vehicle     │  │  Billing /    │  │  Notification    │  │
+  │  │  Registry    │  │  Control Nos. │  │  Service         │  │
+  │  │  Service     │  │  Service      │  │  (SMS / Email)   │  │
+  │  └──────────────┘  └───────────────┘  └──────────────────┘  │
+  └────────────────────┬────────────────────────────────────────┘
+                       │
+  ┌────────────────────▼────────────────────────────────────────┐
+  │           DATABASE — PostgreSQL on Supabase                  │
+  │     Officers · Vehicles · Bills · Locations · Audit Log      │
+  └─────────────────────────────────────────────────────────────┘
+
+  External Integrations:
+  ├── Africa's Talking — SMS Gateway (primary)
+  ├── Resend / SMTP  — Email notifications
+  └── BRELA / SUMATRA  — Vehicle registry (national integration, Phase 2)---(For now we will assume to have plate number already fetched and stored in db)
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. TECHNOLOGY STACK
+────────────────────────────────────────────────────────────────────────────────
+
+  Frontend
+  ────────
+  • React Native 0.74+           — Cross-platform mobile (Android + iOS)
+  • Expo SDK 51+                 — Build tooling, OTA updates, device APIs
+  • Expo Router                  — File-based navigation
+  • React Query (TanStack)       — API data fetching and caching
+  • Zustand                      — Lightweight global state management
+  • React Native Paper           — Material Design UI components
+
+  Backend
+  ────────
+  • Python 3.12 / Django 5.x     — Core backend framework
+  • Django REST Framework         — REST API layer
+  • SimpleJWT                    — JWT authentication
+  • Celery + Redis               — Background tasks (expiry checks, SMS queue)
+  • Docker + docker-compose      — Containerization
+  • Render                       — Cloud deployment platform
+  • Gunicorn + Nginx             — Production WSGI server
+
+  Database
+  ────────
+  • PostgreSQL 15 (Supabase)     — Primary database
+  • Supabase Auth (optional)     — Alternative auth layer
+  • Supabase Storage             — Document/receipt storage (Phase 2)
+
+  DevOps & Tools
+  ────────────────
+  • GitHub                       — Version control and CI/CD
+  • GitHub Actions               — Automated testing and deployment
+  • Sentry                       — Error monitoring
+  • Africa's Talking             — SMS delivery
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. DATABASE SCHEMA (HIGH-LEVEL)
+────────────────────────────────────────────────────────────────────────────────
+
+  TABLE: officers
+    id, employee_id, full_name, phone, email, role, location_id,
+    is_active, created_at
+
+  TABLE: parking_locations
+    id, name, region, district, coordinates, fee_per_hour,
+    fee_per_day, is_active
+
+  TABLE: vehicles
+    id, plate_number, owner_name, owner_phone, owner_email,
+    make, model, color, category, registration_date, is_valid
+
+  TABLE: control_numbers
+    id, control_number (unique), plate_number, vehicle_id,
+    officer_id, location_id, amount_due, generated_at,
+    expires_at, status [ACTIVE|EXPIRED|PAID], sms_sent,
+    email_sent, created_at
+
+  TABLE: audit_log
+    id, officer_id, action, plate_number, control_number,
+    result, ip_address, timestamp
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. SECURITY CONSIDERATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  • All API communication over HTTPS (TLS 1.2+).
+  • JWT tokens with short expiry (60 min access / 7 day refresh).
+  • All actions logged to audit_log table (who did what, when, where).
+  • Officer accounts locked after 5 failed login attempts.
+  • Control number generation is rate-limited per officer per hour.
+  • Supabase Row Level Security (RLS) enabled.
+  • Environment secrets stored in Render environment variables (never in code).
+  • Docker image uses non-root user.
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. ASSUMPTIONS & DEPENDENCIES
+────────────────────────────────────────────────────────────────────────────────
+
+  • Every registered vehicle has a valid phone number on record (as per
+    national vehicle registration requirement).
+  • Email addresses are optional but stored when available.
+  • Parking fee amounts are configurable per location and vehicle category.
+  • Phase 1 uses a seeded/mock vehicle registry; Phase 2 integrates with
+    BRELA or SUMATRA national vehicle database API.
+  • Field officers have Android smartphones with internet connectivity
+    (2G/3G minimum).
+  • Parking locations are pre-registered in the system by an administrator.
+
+
+────────────────────────────────────────────────────────────────────────────────
+10. PROJECT TIMELINE OVERVIEW
+────────────────────────────────────────────────────────────────────────────────
+
+  Sprint 0  — Project Setup, Repos, CI/CD, Environments       (Week 1)
+  Sprint 1  — Officer Auth & Role Management                   (Week 2–3)
+  Sprint 2  — Vehicle Plate Verification Module                (Week 4–5)
+  Sprint 3  — Control Number Generation & Expiry Logic         (Week 6–7)
+  Sprint 4  — SMS / Email Notification Integration             (Week 8)
+  Sprint 5  — Billing History, Reporting & Admin Portal        (Week 9–10)
+  Sprint 6  — Testing, Security Audit & Production Deployment  (Week 11–12)
+
+  Total Estimated Duration: 12 Weeks (3 Months)
+
+
+────────────────────────────────────────────────────────────────────────────────
+11. SUCCESS METRICS
+────────────────────────────────────────────────────────────────────────────────
+
+  • Zero duplicate active control numbers for the same vehicle at any time,
+    across all officers and all locations — guaranteed by server-side enforcement.
+  • 100% of blocked duplicate attempts logged and visible to supervisors.
+  • 100% of generated bills traceable by plate number, officer, and timestamp.
+  • SMS delivery rate ≥ 95% via Africa's Talking gateway.
+  • App works reliably on Android devices running Android 10+.
+  • System uptime ≥ 99.5% on Render deployment.
+  • Daily report generation latency < 3 seconds.
+  • Officer onboarding time < 30 minutes (app install to first transaction).
+
+
+────────────────────────────────────────────────────────────────────────────────
+12. FUTURE ENHANCEMENTS (PHASE 2+)
+────────────────────────────────────────────────────────────────────────────────
+
+  • Payment Integration — Mobile money (M-Pesa, Tigo Pesa, Airtel Money)
+    for direct parking fee payment linked to control numbers.
+  • National Vehicle Registry API — Live plate lookup from SUMATRA/BRELA.
+  • QR Code / Barcode Scan — Scan plate stickers instead of manual entry.
+  • Supervisor Dashboard (Web) — Real-time officer monitoring, revenue charts.
+  • Offline Mode — Queue transactions when connectivity is unavailable.
+  • iOS App Release — Publish to Apple App Store.
+  • Analytics & BI — Monthly revenue trends by location, category, and region.
+
+
+================================================================================
+END OF DOCUMENT — ParkiPay Project Proposal v1.1
+================================================================================

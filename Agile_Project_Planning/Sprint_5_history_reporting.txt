@@ -1,0 +1,184 @@
+# Sprint 5 — Billing History, Reporting & Admin Portal
+
+**Duration**: Week 9–10 (10 working days)
+**Goal**: Officers see their daily billing history in-app. Supervisors and admins
+access a web portal with complete records, daily reports, and exportable data.
+
+---
+
+## Sprint Goal
+> "An officer sees every bill they've issued today with one tap.
+> A supervisor logs into the web portal and sees every bill, from every officer,
+> at every location — filterable, searchable, and downloadable."
+
+---
+
+## User Stories
+
+### US-501 | Officer Daily Billing History (Mobile)
+**As a** field officer,
+**I want** to see all bills I have generated today in a scrollable list,
+**So that** I can track my work, verify records, and handle any disputes.
+
+**Acceptance Criteria:**
+- [ ] `GET /api/billing/history/` returns officer's bills for today (default)
+- [ ] Optional query param `?date=YYYY-MM-DD` for other dates
+- [ ] Each record shows: Plate, Control Number, Amount, Time, Status badge
+- [ ] Status badge color: green (ACTIVE), grey (EXPIRED), blue (PAID)
+- [ ] Sorted by newest first
+- [ ] Empty state: "No bills generated today" with a friendly illustration
+- [ ] Pull-to-refresh updates the list
+- [ ] Tapping a record shows bill detail modal (read-only)
+
+**Tasks:**
+- [ ] `BillingHistoryView` (ListAPIView, officer-scoped, date-filtered)
+- [ ] Pagination: 20 items per page
+- [ ] Create `app/(app)/history.tsx` screen
+- [ ] Build `BillHistoryCard` component
+- [ ] `StatusBadge` component with conditional colors
+- [ ] `useBillingHistory` query hook with date param
+- [ ] Pull-to-refresh (`RefreshControl`)
+- [ ] `BillDetailModal` bottom sheet (react-native-paper BottomSheet)
+- [ ] Add History tab to app bottom navigation
+
+---
+
+### US-502 | Daily Summary Stats (Mobile)
+**As a** field officer,
+**I want** to see a daily summary at the top of my history screen,
+**So that** I know my total bills and total amount collected for the shift.
+
+**Acceptance Criteria:**
+- [ ] Summary card shows: Total Bills Today, Total Amount (TZS), Active Bills, Expired
+- [ ] `GET /api/billing/daily-summary/` returns these aggregates
+- [ ] Summary refreshes when history list refreshes
+- [ ] Numbers animate when screen loads (count-up effect)
+
+**Tasks:**
+- [ ] `DailySummaryView` — aggregate query over today's bills by officer
+- [ ] `SummaryCard` component at top of History screen
+- [ ] Count-up animation using React Native Animated API
+
+---
+
+### US-503 | Admin & Supervisor Web Portal
+**As a** supervisor or administrator,
+**I want** a web-based dashboard to view all billing records across all officers
+and locations,
+**So that** I can monitor activity, detect anomalies, and generate reports.
+
+**Acceptance Criteria:**
+- [ ] Django Admin enhanced with custom admin classes for ControlNumber
+- [ ] Admin can filter by: date range, officer, location, status, plate
+- [ ] Admin can search by: plate number, control number, officer name
+- [ ] Record count and total revenue shown at top of list view
+- [ ] Admin can view full detail of any bill record
+
+**Tasks:**
+- [ ] Enhance `ControlNumberAdmin` with:
+      — `list_display`: date, plate, officer, location, amount, status, sms_sent
+      — `list_filter`: status, location, date, officer
+      — `search_fields`: plate_number, control_number, officer__employee_id
+      — `date_hierarchy`: generated_at
+      — `readonly_fields`: all (no editing of billing records)
+- [ ] Custom `AdminSite` header: "ParkiPay Admin — Government Parking System"
+- [ ] Add aggregate summary in changelist (custom admin action: total revenue)
+- [ ] Secure admin to `ADMIN` and `SUPERVISOR` roles only
+
+---
+
+### US-504 | CSV Report Export
+**As a** supervisor,
+**I want** to export billing records as a CSV file,
+**So that** I can share daily/weekly/monthly reports with government stakeholders.
+
+**Acceptance Criteria:**
+- [ ] `GET /api/reports/export/?start=YYYY-MM-DD&end=YYYY-MM-DD&format=csv`
+- [ ] CSV columns: Date, Time, Control Number, Plate Number, Owner Name,
+      Owner Phone, Officer ID, Location, Amount, Status, SMS Sent
+- [ ] Restricted to SUPERVISOR and ADMIN roles
+- [ ] File named: `parkipay_report_YYYYMMDD_YYYYMMDD.csv`
+- [ ] Large exports (>1000 rows) generated as background task and emailed
+      to requestor
+
+**Tasks:**
+- [ ] `ReportExportView` with date range filter
+- [ ] Use Python `csv` module to stream response
+- [ ] `Content-Disposition: attachment` header for download
+- [ ] For large exports (>1000 rows): Celery task → email CSV attachment
+- [ ] Add export button in Django Admin changelist action
+- [ ] Test with date ranges: 1 day, 7 days, 30 days
+
+---
+
+### US-505 | Audit Log Viewer (Admin)
+**As an** administrator,
+**I want** to view the complete audit log of all officer actions,
+**So that** I can investigate any suspicious activity or disputes.
+
+**Acceptance Criteria:**
+- [ ] Django Admin view for `AuditLog` model
+- [ ] Filterable by: officer, action type, date, plate number
+- [ ] Read-only (no editing of audit logs)
+- [ ] Shows: timestamp, officer, action, plate, result, IP address
+- [ ] Retained for minimum 1 year (no auto-delete)
+
+**Tasks:**
+- [ ] Enhance `AuditLogAdmin` with filters and search
+- [ ] Mark all `AuditLog` fields as `readonly_fields`
+- [ ] Add `has_delete_permission = False` to prevent record deletion
+- [ ] Index `AuditLog` on `officer`, `action`, `timestamp`
+
+---
+
+### US-506 | Offline History Cache (Mobile)
+**As a** field officer in an area with poor connectivity,
+**I want** to see my recent billing history even when offline,
+**So that** I can refer to recent bills without needing an internet connection.
+
+**Acceptance Criteria:**
+- [ ] Last 24 hours of billing history cached locally on device
+- [ ] History screen loads from cache when offline (with "Offline" banner)
+- [ ] Cache is refreshed automatically when connectivity is restored
+- [ ] Cache is cleared on logout
+
+**Tasks:**
+- [ ] Use React Query's `cacheTime` and `staleTime` for in-memory cache
+- [ ] Use `expo-file-system` or `AsyncStorage` for persistent offline cache
+- [ ] `NetInfo` listener to detect offline status
+- [ ] "You are offline — showing cached data" banner component
+- [ ] Clear cache in `authStore.clearAuth()` on logout
+
+---
+
+## Sprint 5 Deliverables
+
+- [ ] Officer daily history API endpoint (paginated, date-filtered)
+- [ ] Daily summary stats endpoint
+- [ ] History screen with pull-to-refresh and bill detail modal
+- [ ] Summary stats card with animations
+- [ ] Enhanced Django Admin for supervisors
+- [ ] CSV export endpoint and admin action
+- [ ] Audit log admin view
+- [ ] Offline history cache on mobile
+- [ ] All tests passing
+
+---
+
+## API Endpoints — Sprint 5
+
+| Method | Endpoint                        | Auth     | Description                    |
+|--------|---------------------------------|----------|--------------------------------|
+| GET    | /api/billing/history/           | Officer  | Officer's daily billing history |
+| GET    | /api/billing/daily-summary/     | Officer  | Today's stats for officer      |
+| GET    | /api/reports/export/            | Supervisor+ | Export bills as CSV          |
+
+---
+
+## Notes & Risks
+
+| Risk                                       | Mitigation                                    |
+|--------------------------------------------|-----------------------------------------------|
+| Large CSV exports blocking server          | Stream response + Celery for >1000 rows       |
+| Officers confused by history vs new bill   | Clear visual separation of history tab        |
+| Audit log growing very large               | Partition by month; archive after 1 year      |
