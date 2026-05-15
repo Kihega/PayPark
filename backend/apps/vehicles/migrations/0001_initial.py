@@ -1,0 +1,88 @@
+"""
+Initial migration: vehicles app
+Creates ParkingLocation and Vehicle tables.
+Must run BEFORE accounts migration (Officer has FK to ParkingLocation).
+"""
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = []
+
+    operations = [
+        migrations.CreateModel(
+            name="ParkingLocation",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                ("name", models.CharField(max_length=120)),
+                ("region", models.CharField(max_length=60)),
+                ("district", models.CharField(blank=True, max_length=60)),
+                ("address", models.TextField(blank=True)),
+                ("latitude", models.DecimalField(blank=True, decimal_places=7, max_digits=10, null=True)),
+                ("longitude", models.DecimalField(blank=True, decimal_places=7, max_digits=10, null=True)),
+                ("fee_motorcycle", models.DecimalField(decimal_places=2, default=500, max_digits=10)),
+                ("fee_private_car", models.DecimalField(decimal_places=2, default=1000, max_digits=10)),
+                ("fee_minibus", models.DecimalField(decimal_places=2, default=2000, max_digits=10)),
+                ("fee_bus", models.DecimalField(decimal_places=2, default=3000, max_digits=10)),
+                ("fee_truck", models.DecimalField(decimal_places=2, default=5000, max_digits=10)),
+                ("fee_government", models.DecimalField(decimal_places=2, default=0, max_digits=10)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+            ],
+            options={
+                "verbose_name": "Parking Location",
+                "verbose_name_plural": "Parking Locations",
+                "ordering": ["region", "name"],
+            },
+        ),
+        migrations.CreateModel(
+            name="Vehicle",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
+                ("plate_number", models.CharField(
+                    db_index=True,
+                    help_text="Normalised to UPPERCASE, no spaces.",
+                    max_length=20,
+                    unique=True,
+                )),
+                ("owner_name", models.CharField(max_length=150)),
+                ("owner_phone", models.CharField(
+                    help_text="Must be a valid Tanzanian mobile number (+255...).",
+                    max_length=20,
+                )),
+                ("owner_email", models.EmailField(blank=True)),
+                ("make", models.CharField(blank=True, help_text="e.g. Toyota", max_length=60)),
+                ("model", models.CharField(blank=True, help_text="e.g. Corolla", max_length=60)),
+                ("color", models.CharField(blank=True, max_length=40)),
+                ("year", models.PositiveSmallIntegerField(blank=True, null=True)),
+                ("category", models.CharField(
+                    choices=[
+                        ("MOTORCYCLE", "Motorcycle / Bajaj"),
+                        ("PRIVATE_CAR", "Private Car"),
+                        ("MINIBUS", "Minibus (Daladala)"),
+                        ("BUS", "Bus / Coach"),
+                        ("TRUCK", "Truck / Lorry"),
+                        ("GOVERNMENT", "Government Vehicle"),
+                    ],
+                    default="PRIVATE_CAR",
+                    max_length=20,
+                )),
+                ("registration_date", models.DateField(blank=True, null=True)),
+                ("is_valid", models.BooleanField(
+                    default=True,
+                    help_text="False = unregistered, stolen, or flagged.",
+                )),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+            ],
+            options={
+                "verbose_name": "Vehicle",
+                "verbose_name_plural": "Vehicles",
+                "ordering": ["plate_number"],
+            },
+        ),
+    ]

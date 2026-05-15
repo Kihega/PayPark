@@ -1,0 +1,22 @@
+# Node / Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+
+# Python / Django
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+.venv/
+
+# Django database (optional)
+db.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
