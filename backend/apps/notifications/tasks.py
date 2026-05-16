@@ -8,9 +8,7 @@ Celery tasks for SMS via Africa's Talking and email via Resend.
 
 def send_sms_notification(bill_id: int):
     """Send SMS to vehicle owner via Africa's Talking. (Sprint 4)"""
-    pass
 
 
 def send_email_notification(bill_id: int):
     """Send email receipt to vehicle owner via Resend. (Sprint 4)"""
-    pass

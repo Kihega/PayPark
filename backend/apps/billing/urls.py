@@ -1,6 +1,4 @@
 """ParkiPay — Billing URL Routes (Sprint 3)"""
-from django.urls import path
-
 urlpatterns = [
     # Sprint 3: control number generation & history
     # path("generate/", GenerateBillView.as_view(), name="billing-generate"),
