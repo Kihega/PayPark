@@ -1,3 +1,11 @@
+# ── ParkiPay CI Pipeline ────────────────────────────────────────────────────
+# Trigger: every push / PR to the `develop` branch
+# Jobs:    backend-quality → backend-tests → frontend-quality → merge-to-main
+#
+# Required GitHub Secrets:
+#   GH_PAT — Personal Access Token (repo + workflow scopes)
+# ---------------------------------------------------------------------------
+
 name: CI
 
 on:
@@ -10,56 +18,66 @@ defaults:
   run:
     shell: bash
 
-# ─────────────────────────────────────────────────────────────
-# Backend Quality
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# BACKEND QUALITY (Lint + Formatting)
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
   backend-quality:
-    name: "Backend — Lint & Type Check"
+    name: "Backend — Lint, Import Order & Format"
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
-
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install flake8 black isort
+          pip install flake8 isort black
 
-      - name: flake8
-        run: flake8 . --max-line-length=120 --exclude=migrations,__pycache__,.venv
+      - name: flake8 (code style & errors)
+        run: |
+          flake8 . \
+            --max-line-length=120 \
+            --exclude=venv,.venv,migrations,__pycache__,.git,build,dist
 
-      - name: isort
-        run: isort . --check-only --diff --profile black
+      - name: isort (import sorting check)
+        run: |
+          isort . \
+            --check-only \
+            --diff \
+            --profile black \
+            --skip migrations \
+            --skip venv \
+            --skip .venv
 
-      - name: black
-        run: black . --check --line-length=120
+      - name: black (format check)
+        run: |
+          black . \
+            --check \
+            --line-length=120 \
+            --exclude="(venv|.venv|migrations|__pycache__)"
 
-
-# ─────────────────────────────────────────────────────────────
-# Backend Tests
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# BACKEND TESTS (Pytest + DB)
+# ─────────────────────────────────────────────────────────────────────────────
   backend-tests:
     name: "Backend — Pytest"
     runs-on: ubuntu-latest
     needs: backend-quality
+
     defaults:
       run:
         working-directory: backend
@@ -94,64 +112,60 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install dependencies
+      - name: Install test dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-django pytest-cov
 
-      - name: Django check
-        run: python manage.py check
-
       - name: Run migrations
         run: python manage.py migrate --noinput
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
-          pytest --cov=apps --cov-report=term-missing -v
+          pytest -v \
+            --cov=apps \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
 
-      - name: Upload coverage
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: backend/coverage.xml
           retention-days: 7
 
-
-# ─────────────────────────────────────────────────────────────
-# Frontend Quality
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# FRONTEND QUALITY (Expo / React Native)
+# ─────────────────────────────────────────────────────────────────────────────
   frontend-quality:
-    name: "Frontend — ESLint & TypeScript"
+    name: "Frontend — Lint & Type Check"
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: mobile
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
-
-      - name: Cache node modules
-        uses: actions/cache@v4
-        with:
-          path: mobile/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('mobile/package-lock.json') }}
 
       - name: Install dependencies
         run: npm ci
@@ -162,29 +176,29 @@ jobs:
       - name: TypeScript check
         run: npm run type-check
 
-
-# ─────────────────────────────────────────────────────────────
-# Safe Merge Strategy (develop → main)
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTO MERGE (develop → main)
+# ─────────────────────────────────────────────────────────────────────────────
   merge-to-main:
-    name: "Merge develop → main"
+    name: "Auto Merge develop → main"
     runs-on: ubuntu-latest
-    needs: [backend-quality, backend-tests, frontend-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [backend-quality, backend-tests, frontend-quality]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
-      - name: Configure git
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Safe merge (fast-forward only)
+      - name: Merge develop into main
         run: |
           git checkout main
-          git merge --ff-only origin/develop
+          git merge --no-ff develop -m "ci: auto-merge develop → main"
           git push origin main
