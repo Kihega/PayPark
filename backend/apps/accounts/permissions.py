@@ -1,4 +1,5 @@
 """ParkiPay — Role-Based DRF Permission Classes"""
+
 from rest_framework.permissions import BasePermission
 
 from apps.accounts.models import OfficerRole
@@ -26,8 +27,4 @@ class IsAdmin(BasePermission):
     """Allow ADMIN role only."""
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == OfficerRole.ADMIN
-        )
+        return request.user and request.user.is_authenticated and request.user.role == OfficerRole.ADMIN

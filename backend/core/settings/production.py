@@ -1,4 +1,5 @@
 """ParkiPay — Production Settings (Render)"""
+
 from decouple import Csv, config
 
 from .base import *  # noqa
@@ -26,6 +27,7 @@ SENTRY_DSN = config("SENTRY_DSN", default="")
 if SENTRY_DSN:
     import sentry_sdk
     from sentry_sdk.integrations.django import DjangoIntegration
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[DjangoIntegration()],

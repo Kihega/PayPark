@@ -2,6 +2,7 @@
 ParkiPay — Celery Application
 Handles async tasks: SMS dispatch, email dispatch, control number expiry sweep.
 """
+
 import os
 
 from celery import Celery
@@ -12,8 +13,7 @@ settings_map = {
     "staging": "core.settings.production",
     "production": "core.settings.production",
 }
-os.environ.setdefault("DJANGO_SETTINGS_MODULE",
-                      settings_map.get(env, "core.settings.local"))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_map.get(env, "core.settings.local"))
 
 app = Celery("parkipay")
 

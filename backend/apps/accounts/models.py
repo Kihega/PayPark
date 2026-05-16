@@ -3,12 +3,10 @@ ParkiPay — Accounts Models
 Officer: Custom AbstractBaseUser authenticated by employee_id + password.
 AuditLog: Immutable record of every security-relevant action.
 """
+
 from django.conf import settings
-from django.contrib.auth.models import (
-    AbstractBaseUser,
-    BaseUserManager,
-    PermissionsMixin,
-)
+from django.contrib.auth.models import (AbstractBaseUser, BaseUserManager,
+                                        PermissionsMixin)
 from django.db import models
 from django.utils import timezone
 
@@ -36,6 +34,7 @@ class OfficerManager(BaseUserManager):
 
 # ── Choices ───────────────────────────────────────────────────────────────────
 
+
 class OfficerRole(models.TextChoices):
     FIELD_OFFICER = "FIELD_OFFICER", "Field Officer"
     SUPERVISOR = "SUPERVISOR", "Supervisor"
@@ -44,11 +43,13 @@ class OfficerRole(models.TextChoices):
 
 # ── Officer Model ─────────────────────────────────────────────────────────────
 
+
 class Officer(AbstractBaseUser, PermissionsMixin):
     """
     Government field officer who uses the ParkiPay mobile app.
     Authenticated via employee_id (not username or email).
     """
+
     employee_id = models.CharField(
         max_length=20,
         unique=True,
@@ -117,6 +118,7 @@ class Officer(AbstractBaseUser, PermissionsMixin):
         self.failed_login_attempts += 1
         if self.failed_login_attempts >= max_attempts:
             from datetime import timedelta
+
             self.locked_until = timezone.now() + timedelta(minutes=lockout_minutes)
         self.save(update_fields=["failed_login_attempts", "locked_until"])
 
@@ -129,6 +131,7 @@ class Officer(AbstractBaseUser, PermissionsMixin):
 
 
 # ── Audit Log ─────────────────────────────────────────────────────────────────
+
 
 class AuditLog(models.Model):
     """
@@ -154,8 +157,7 @@ class AuditLog(models.Model):
         blank=True,
         related_name="audit_logs",
     )
-    action = models.CharField(
-        max_length=40, choices=Action.choices, db_index=True)
+    action = models.CharField(max_length=40, choices=Action.choices, db_index=True)
     plate_number = models.CharField(max_length=20, blank=True, db_index=True)
     control_number = models.CharField(max_length=30, blank=True)
     result = models.CharField(max_length=40, blank=True)
@@ -180,6 +182,7 @@ class AuditLog(models.Model):
 
 # ── Helper function ───────────────────────────────────────────────────────────
 
+
 def log_action(officer, action, *, plate_number="", control_number="", result="", request=None, **extra):
     """
     Convenience wrapper to write to the audit log.
@@ -189,8 +192,7 @@ def log_action(officer, action, *, plate_number="", control_number="", result=""
     ua = ""
     if request:
         x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        ip = x_forwarded.split(",")[0].strip(
-        ) if x_forwarded else request.META.get("REMOTE_ADDR")
+        ip = x_forwarded.split(",")[0].strip() if x_forwarded else request.META.get("REMOTE_ADDR")
         ua = request.META.get("HTTP_USER_AGENT", "")[:300]
 
     try:

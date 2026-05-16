@@ -1,4 +1,5 @@
 """ParkiPay — Custom DRF Exception Handler"""
+
 from rest_framework.views import exception_handler
 
 

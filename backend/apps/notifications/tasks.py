@@ -2,6 +2,7 @@
 ParkiPay — Notification Tasks (Sprint 4)
 Celery tasks for SMS via Africa's Talking and email via Resend.
 """
+
 # Sprint 4 implementation goes here.
 # Placeholder stubs so billing views can import without errors in Sprint 0/1.
 

@@ -10,6 +10,7 @@ Usage:
     python manage.py seed_dev_data
     python manage.py seed_dev_data --reset   (clears existing data first)
 """
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -134,36 +135,106 @@ OFFICERS = [
 ]
 
 VEHICLES = [
-    {"plate": "T123ABC", "owner": "Chakula Enterprises Ltd", "phone": "+255711100001",
-     "make": "Toyota", "model": "Hiace", "color": "White", "year": 2019,
-     "category": VehicleCategory.MINIBUS},
-    {"plate": "T456DEF", "owner": "Amani Hassan", "phone": "+255722200002",
-     "make": "Toyota", "model": "Corolla", "color": "Silver", "year": 2021,
-     "category": VehicleCategory.PRIVATE_CAR},
-    {"plate": "T789GHI", "owner": "Logistics TZ Co.", "phone": "+255733300003",
-     "make": "Isuzu", "model": "NQR", "color": "Blue", "year": 2018,
-     "category": VehicleCategory.TRUCK},
-    {"plate": "T321JKL", "owner": "Zawadi Petro", "phone": "+255744400004",
-     "make": "Honda", "model": "CB125", "color": "Red", "year": 2022,
-     "category": VehicleCategory.MOTORCYCLE},
-    {"plate": "T654MNO", "owner": "Dar Express Bus Co.", "phone": "+255755500005",
-     "make": "Yutong", "model": "ZK6122H", "color": "Orange", "year": 2020,
-     "category": VehicleCategory.BUS},
-    {"plate": "T987PQR", "owner": "Baraka Ally", "phone": "+255766600006",
-     "make": "Suzuki", "model": "Alto", "color": "Green", "year": 2020,
-     "category": VehicleCategory.PRIVATE_CAR},
-    {"plate": "SMZ001", "owner": "Zanzibar Port Authority", "phone": "+255777700007",
-     "make": "Toyota", "model": "Land Cruiser", "color": "White", "year": 2023,
-     "category": VehicleCategory.GOVERNMENT},
-    {"plate": "T112STU", "owner": "Neema Mchome", "phone": "+255788800008",
-     "make": "Bajaj", "model": "RE", "color": "Yellow", "year": 2021,
-     "category": VehicleCategory.MOTORCYCLE},
-    {"plate": "T334VWX", "owner": "Safari Tours Ltd", "phone": "+255799900009",
-     "make": "Toyota", "model": "Land Cruiser", "color": "Beige", "year": 2022,
-     "category": VehicleCategory.PRIVATE_CAR},
-    {"plate": "T556YZA", "owner": "Ndoto Trucking", "phone": "+255700000010",
-     "make": "Mercedes", "model": "Actros", "color": "Red", "year": 2017,
-     "category": VehicleCategory.TRUCK},
+    {
+        "plate": "T123ABC",
+        "owner": "Chakula Enterprises Ltd",
+        "phone": "+255711100001",
+        "make": "Toyota",
+        "model": "Hiace",
+        "color": "White",
+        "year": 2019,
+        "category": VehicleCategory.MINIBUS,
+    },
+    {
+        "plate": "T456DEF",
+        "owner": "Amani Hassan",
+        "phone": "+255722200002",
+        "make": "Toyota",
+        "model": "Corolla",
+        "color": "Silver",
+        "year": 2021,
+        "category": VehicleCategory.PRIVATE_CAR,
+    },
+    {
+        "plate": "T789GHI",
+        "owner": "Logistics TZ Co.",
+        "phone": "+255733300003",
+        "make": "Isuzu",
+        "model": "NQR",
+        "color": "Blue",
+        "year": 2018,
+        "category": VehicleCategory.TRUCK,
+    },
+    {
+        "plate": "T321JKL",
+        "owner": "Zawadi Petro",
+        "phone": "+255744400004",
+        "make": "Honda",
+        "model": "CB125",
+        "color": "Red",
+        "year": 2022,
+        "category": VehicleCategory.MOTORCYCLE,
+    },
+    {
+        "plate": "T654MNO",
+        "owner": "Dar Express Bus Co.",
+        "phone": "+255755500005",
+        "make": "Yutong",
+        "model": "ZK6122H",
+        "color": "Orange",
+        "year": 2020,
+        "category": VehicleCategory.BUS,
+    },
+    {
+        "plate": "T987PQR",
+        "owner": "Baraka Ally",
+        "phone": "+255766600006",
+        "make": "Suzuki",
+        "model": "Alto",
+        "color": "Green",
+        "year": 2020,
+        "category": VehicleCategory.PRIVATE_CAR,
+    },
+    {
+        "plate": "SMZ001",
+        "owner": "Zanzibar Port Authority",
+        "phone": "+255777700007",
+        "make": "Toyota",
+        "model": "Land Cruiser",
+        "color": "White",
+        "year": 2023,
+        "category": VehicleCategory.GOVERNMENT,
+    },
+    {
+        "plate": "T112STU",
+        "owner": "Neema Mchome",
+        "phone": "+255788800008",
+        "make": "Bajaj",
+        "model": "RE",
+        "color": "Yellow",
+        "year": 2021,
+        "category": VehicleCategory.MOTORCYCLE,
+    },
+    {
+        "plate": "T334VWX",
+        "owner": "Safari Tours Ltd",
+        "phone": "+255799900009",
+        "make": "Toyota",
+        "model": "Land Cruiser",
+        "color": "Beige",
+        "year": 2022,
+        "category": VehicleCategory.PRIVATE_CAR,
+    },
+    {
+        "plate": "T556YZA",
+        "owner": "Ndoto Trucking",
+        "phone": "+255700000010",
+        "make": "Mercedes",
+        "model": "Actros",
+        "color": "Red",
+        "year": 2017,
+        "category": VehicleCategory.TRUCK,
+    },
 ]
 
 
@@ -178,18 +249,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.MIGRATE_HEADING(
-            "\n🌱  ParkiPay Dev Data Seed\n"))
+        self.stdout.write(self.style.MIGRATE_HEADING("\n🌱  ParkiPay Dev Data Seed\n"))
 
         with transaction.atomic():
             if options["reset"]:
                 self.stdout.write("  → Clearing existing data...")
                 Vehicle.objects.all().delete()
-                Officer.objects.filter(
-                    employee_id__in=[o["employee_id"] for o in OFFICERS]).delete()
+                Officer.objects.filter(employee_id__in=[o["employee_id"] for o in OFFICERS]).delete()
                 ParkingLocation.objects.all().delete()
-                self.stdout.write(self.style.WARNING(
-                    "  → Existing seed data cleared.\n"))
+                self.stdout.write(self.style.WARNING("  → Existing seed data cleared.\n"))
 
             # ── Parking Locations ─────────────────────────────────────────────
             self.stdout.write("  → Creating parking locations...")
@@ -201,18 +269,15 @@ class Command(BaseCommand):
                     defaults=loc_data,
                 )
                 created_locations.append(loc)
-                status = self.style.SUCCESS(
-                    "created") if created else "already exists"
-                self.stdout.write(
-                    f"     {'✅' if created else '⏭ '} {loc.name} — {status}")
+                status = self.style.SUCCESS("created") if created else "already exists"
+                self.stdout.write(f"     {'✅' if created else '⏭ '} {loc.name} — {status}")
 
             # ── Officers ──────────────────────────────────────────────────────
             self.stdout.write("\n  → Creating officers...")
             for off_data in OFFICERS:
                 location = None
                 if "location_index" in off_data:
-                    location = created_locations[off_data.pop(
-                        "location_index")]
+                    location = created_locations[off_data.pop("location_index")]
 
                 password = off_data.pop("password")
                 is_superuser = off_data.pop("is_superuser", False)
@@ -230,8 +295,7 @@ class Command(BaseCommand):
                 if created:
                     officer.set_password(password)
                     officer.save()
-                status = self.style.SUCCESS(
-                    "created") if created else "already exists"
+                status = self.style.SUCCESS("created") if created else "already exists"
                 self.stdout.write(
                     f"     {'✅' if created else '⏭ '} {officer.full_name}"
                     f" [{officer.role}]  login: {officer.employee_id} / {password if created else '(unchanged)'}"
@@ -253,18 +317,19 @@ class Command(BaseCommand):
                         "category": v["category"],
                     },
                 )
-                status = self.style.SUCCESS(
-                    "created") if created else "already exists"
+                status = self.style.SUCCESS("created") if created else "already exists"
                 self.stdout.write(
                     f"     {'✅' if created else '⏭ '} {vehicle.plate_number}"
                     f" — {vehicle.make} {vehicle.model} ({vehicle.category}) — {status}"
                 )
 
-        self.stdout.write(self.style.SUCCESS(
-            f"\n✅  Seeding complete!\n"
-            f"    Locations : {len(LOCATIONS)}\n"
-            f"    Officers  : {len(OFFICERS)}\n"
-            f"    Vehicles  : {len(VEHICLES)}\n\n"
-            f"    Admin login → employee_id: ADMIN001 / password: ParkiPay@Admin2026!\n"
-            f"    Django admin → http://localhost:8000/admin/\n"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"\n✅  Seeding complete!\n"
+                f"    Locations : {len(LOCATIONS)}\n"
+                f"    Officers  : {len(OFFICERS)}\n"
+                f"    Vehicles  : {len(VEHICLES)}\n\n"
+                f"    Admin login → employee_id: ADMIN001 / password: ParkiPay@Admin2026!\n"
+                f"    Django admin → http://localhost:8000/admin/\n"
+            )
+        )

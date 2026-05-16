@@ -1,4 +1,5 @@
 """ParkiPay — Auth Serializers"""
+
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
@@ -35,6 +36,7 @@ class OfficerProfileSerializer(serializers.ModelSerializer):
 
 # ── Custom JWT Token Serializer ───────────────────────────────────────────────
 
+
 class ParkiPayTokenObtainSerializer(TokenObtainPairSerializer):
     """
     Extends the default JWT serializer to:
@@ -43,6 +45,7 @@ class ParkiPayTokenObtainSerializer(TokenObtainPairSerializer):
     3. Write every attempt to the audit log
     4. Embed role in the token payload
     """
+
     username_field = "employee_id"
 
     def validate(self, attrs):
@@ -60,16 +63,12 @@ class ParkiPayTokenObtainSerializer(TokenObtainPairSerializer):
                 result="account_not_found",
                 extra={"employee_id": employee_id},
             )
-            raise AuthenticationFailed(
-                {"error": "invalid_credentials",
-                    "detail": "Invalid employee ID or password."}
-            )
+            raise AuthenticationFailed({"error": "invalid_credentials", "detail": "Invalid employee ID or password."})
 
         # ── Check lockout ─────────────────────────────────────────────────
         if officer.is_locked:
             log_action(officer, AuditLog.Action.LOGIN_LOCKED, result="locked")
-            remaining = int(
-                (officer.locked_until - timezone.now()).total_seconds() / 60)
+            remaining = int((officer.locked_until - timezone.now()).total_seconds() / 60)
             raise AuthenticationFailed(
                 {
                     "error": "account_locked",
@@ -81,12 +80,10 @@ class ParkiPayTokenObtainSerializer(TokenObtainPairSerializer):
         # ── Verify password ───────────────────────────────────────────────
         if not officer.check_password(password) or not officer.is_active:
             officer.record_failed_login()
-            log_action(officer, AuditLog.Action.LOGIN_FAILURE,
-                       result="wrong_password")
+            log_action(officer, AuditLog.Action.LOGIN_FAILURE, result="wrong_password")
 
             max_attempts = getattr(settings, "MAX_FAILED_LOGIN_ATTEMPTS", 5)
-            remaining_attempts = max(
-                0, max_attempts - officer.failed_login_attempts)
+            remaining_attempts = max(0, max_attempts - officer.failed_login_attempts)
 
             raise AuthenticationFailed(
                 {
@@ -122,7 +119,7 @@ class ParkiPayTokenObtainSerializer(TokenObtainPairSerializer):
 
 # ── Login Request Serializer (for docs/validation) ────────────────────────────
 
+
 class LoginRequestSerializer(serializers.Serializer):
     employee_id = serializers.CharField(max_length=20)
-    password = serializers.CharField(
-        write_only=True, style={"input_type": "password"})
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})

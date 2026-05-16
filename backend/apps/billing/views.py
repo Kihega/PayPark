@@ -1,4 +1,5 @@
 """ParkiPay — Billing Views (Sprint 3)"""
+
 # Sprint 3 implementation:
 #   POST /api/billing/generate/       — global duplicate check + generate
 #   GET  /api/billing/history/        — officer daily bill history

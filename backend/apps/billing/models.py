@@ -3,6 +3,7 @@ ParkiPay — Billing Models
 ControlNumber: the core transactional record with built-in
 global duplicate-prevention via get_active_bill_for_plate().
 """
+
 import random
 import string
 
@@ -19,13 +20,12 @@ def generate_control_number() -> str:
     Format: PKP-YYYYMMDD-XXXXXX  (e.g. PKP-20260515-A3F9K2)
     """
     date_part = timezone.now().strftime("%Y%m%d")
-    random_part = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=6)
-    )
+    random_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"PKP-{date_part}-{random_part}"
 
 
 # ── Status Choices ────────────────────────────────────────────────────────────
+
 
 class BillStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
@@ -35,6 +35,7 @@ class BillStatus(models.TextChoices):
 
 # ── ControlNumber Model ───────────────────────────────────────────────────────
 
+
 class ControlNumber(models.Model):
     """
     A single parking bill tied to one vehicle at one point in time.
@@ -43,6 +44,7 @@ class ControlNumber(models.Model):
     across the entire system at any given time. This is enforced both at
     query time (get_active_bill_for_plate) and at model save time.
     """
+
     control_number = models.CharField(
         max_length=30,
         unique=True,
@@ -117,6 +119,7 @@ class ControlNumber(models.Model):
             if not self.expires_at:
                 hours = getattr(settings, "CONTROL_NUMBER_VALIDITY_HOURS", 5)
                 from datetime import timedelta
+
                 self.expires_at = timezone.now() + timedelta(hours=hours)
             # Normalise plate
             self.plate_number = self.plate_number.strip().upper().replace(" ", "")
@@ -138,6 +141,7 @@ class ControlNumber(models.Model):
 
 
 # ── Global Duplicate Prevention ───────────────────────────────────────────────
+
 
 def get_active_bill_for_plate(plate_number: str):
     """

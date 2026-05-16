@@ -1,4 +1,5 @@
 """ParkiPay — Vehicles Views (Sprint 2)"""
+
 # Sprint 2 implementation:
 #   GET /api/vehicles/lookup/?plate=TZ001ABC
 #   GET /api/vehicles/locations/

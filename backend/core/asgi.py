@@ -1,4 +1,5 @@
 """ParkiPay — ASGI entry point (future WebSocket / async support)."""
+
 import os
 
 from django.core.asgi import get_asgi_application
@@ -9,7 +10,6 @@ settings_map = {
     "staging": "core.settings.production",
     "production": "core.settings.production",
 }
-os.environ.setdefault("DJANGO_SETTINGS_MODULE",
-                      settings_map.get(env, "core.settings.local"))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_map.get(env, "core.settings.local"))
 
 application = get_asgi_application()

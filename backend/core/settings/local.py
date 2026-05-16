@@ -1,4 +1,5 @@
 """ParkiPay — Local Development Settings"""
+
 from .base import *  # noqa
 
 DEBUG = True
