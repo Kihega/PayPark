@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ParkiPay",
-    "slug": "parkipay",
+    "slug": "parkipay-",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -23,7 +23,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": ["android.permission.INTERNET"]
+      "permissions": [
+        "android.permission.INTERNET"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -46,8 +48,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id-here"
-      }
-    }
+        "projectId": "20f00c2b-7450-4203-8fce-f90943848dea"
+      },
+      "router": {}
+    },
+    "owner": "mangentechnologies-026"
   }
 }
