@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # Copy source
 COPY . .
-
+ENV SECRET_KEY=dummysecret
 # Static files
 RUN mkdir -p staticfiles && \
     DJANGO_ENV=production python manage.py collectstatic --noinput || true
