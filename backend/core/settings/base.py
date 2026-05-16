@@ -12,7 +12,10 @@ from decouple import Csv, config
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # ── Security ──────────────────────────────────────────────────────────────────
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = config(
+    "SECRET_KEY",
+    default="unsafe-dev-key"
+)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv(), default="localhost,127.0.0.1")
 
 # ── Apps ──────────────────────────────────────────────────────────────────────
