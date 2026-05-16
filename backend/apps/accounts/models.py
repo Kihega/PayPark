@@ -14,6 +14,7 @@ from django.utils import timezone
 
 # ── Officer Manager ───────────────────────────────────────────────────────────
 
+
 class OfficerManager(BaseUserManager):
     def create_user(self, employee_id, password, **extra_fields):
         if not employee_id:

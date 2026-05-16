@@ -9,6 +9,7 @@ from apps.accounts.models import AuditLog, Officer, log_action
 
 # ── Officer Profile Serializer ────────────────────────────────────────────────
 
+
 class OfficerProfileSerializer(serializers.ModelSerializer):
     location_name = serializers.SerializerMethodField()
 

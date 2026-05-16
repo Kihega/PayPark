@@ -12,6 +12,7 @@ from django.utils import timezone
 
 # ── Control Number Generator ──────────────────────────────────────────────────
 
+
 def generate_control_number() -> str:
     """
     Generates a human-readable, unique control number.

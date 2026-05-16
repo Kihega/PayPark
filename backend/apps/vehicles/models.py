@@ -7,6 +7,7 @@ from django.db import models
 
 # ── Vehicle Category ──────────────────────────────────────────────────────────
 
+
 class VehicleCategory(models.TextChoices):
     MOTORCYCLE = "MOTORCYCLE", "Motorcycle / Bajaj"
     PRIVATE_CAR = "PRIVATE_CAR", "Private Car"
