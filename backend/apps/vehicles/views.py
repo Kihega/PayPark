@@ -7,4 +7,6 @@ from django.http import JsonResponse
 
 
 def placeholder(request):
-    return JsonResponse({"detail": "Sprint 2 — Vehicle lookup coming soon."}, status=501)
+    return JsonResponse(
+        {"detail": "Sprint 2 — Vehicle lookup coming soon."}, status=501
+    )

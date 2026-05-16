@@ -12,12 +12,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import (TokenObtainPairView,
-                                            TokenRefreshView)
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.accounts.models import AuditLog, log_action
-from apps.accounts.serializers import (OfficerProfileSerializer,
-                                       ParkiPayTokenObtainSerializer)
+from apps.accounts.serializers import (
+    OfficerProfileSerializer,
+    ParkiPayTokenObtainSerializer,
+)
 
 
 class LoginView(TokenObtainPairView):
@@ -75,8 +76,12 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        log_action(request.user, AuditLog.Action.LOGOUT, result="success", request=request)
-        return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
+        log_action(
+            request.user, AuditLog.Action.LOGOUT, result="success", request=request
+        )
+        return Response(
+            {"detail": "Logged out successfully."}, status=status.HTTP_200_OK
+        )
 
 
 class MeView(APIView):

@@ -255,9 +255,13 @@ class Command(BaseCommand):
             if options["reset"]:
                 self.stdout.write("  → Clearing existing data...")
                 Vehicle.objects.all().delete()
-                Officer.objects.filter(employee_id__in=[o["employee_id"] for o in OFFICERS]).delete()
+                Officer.objects.filter(
+                    employee_id__in=[o["employee_id"] for o in OFFICERS]
+                ).delete()
                 ParkingLocation.objects.all().delete()
-                self.stdout.write(self.style.WARNING("  → Existing seed data cleared.\n"))
+                self.stdout.write(
+                    self.style.WARNING("  → Existing seed data cleared.\n")
+                )
 
             # ── Parking Locations ─────────────────────────────────────────────
             self.stdout.write("  → Creating parking locations...")
@@ -270,7 +274,9 @@ class Command(BaseCommand):
                 )
                 created_locations.append(loc)
                 status = self.style.SUCCESS("created") if created else "already exists"
-                self.stdout.write(f"     {'✅' if created else '⏭ '} {loc.name} — {status}")
+                self.stdout.write(
+                    f"     {'✅' if created else '⏭ '} {loc.name} — {status}"
+                )
 
             # ── Officers ──────────────────────────────────────────────────────
             self.stdout.write("\n  → Creating officers...")

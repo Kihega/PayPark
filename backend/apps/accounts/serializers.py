@@ -63,12 +63,19 @@ class ParkiPayTokenObtainSerializer(TokenObtainPairSerializer):
                 result="account_not_found",
                 extra={"employee_id": employee_id},
             )
-            raise AuthenticationFailed({"error": "invalid_credentials", "detail": "Invalid employee ID or password."})
+            raise AuthenticationFailed(
+                {
+                    "error": "invalid_credentials",
+                    "detail": "Invalid employee ID or password.",
+                }
+            )
 
         # ── Check lockout ─────────────────────────────────────────────────
         if officer.is_locked:
             log_action(officer, AuditLog.Action.LOGIN_LOCKED, result="locked")
-            remaining = int((officer.locked_until - timezone.now()).total_seconds() / 60)
+            remaining = int(
+                (officer.locked_until - timezone.now()).total_seconds() / 60
+            )
             raise AuthenticationFailed(
                 {
                     "error": "account_locked",

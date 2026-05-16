@@ -5,8 +5,11 @@ AuditLog: Immutable record of every security-relevant action.
 """
 
 from django.conf import settings
-from django.contrib.auth.models import (AbstractBaseUser, BaseUserManager,
-                                        PermissionsMixin)
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+)
 from django.db import models
 from django.utils import timezone
 
@@ -183,7 +186,16 @@ class AuditLog(models.Model):
 # ── Helper function ───────────────────────────────────────────────────────────
 
 
-def log_action(officer, action, *, plate_number="", control_number="", result="", request=None, **extra):
+def log_action(
+    officer,
+    action,
+    *,
+    plate_number="",
+    control_number="",
+    result="",
+    request=None,
+    **extra,
+):
     """
     Convenience wrapper to write to the audit log.
     Call from any view; does not raise exceptions.
@@ -192,7 +204,11 @@ def log_action(officer, action, *, plate_number="", control_number="", result=""
     ua = ""
     if request:
         x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        ip = x_forwarded.split(",")[0].strip() if x_forwarded else request.META.get("REMOTE_ADDR")
+        ip = (
+            x_forwarded.split(",")[0].strip()
+            if x_forwarded
+            else request.META.get("REMOTE_ADDR")
+        )
         ua = request.META.get("HTTP_USER_AGENT", "")[:300]
 
     try:

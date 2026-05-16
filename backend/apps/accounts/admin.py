@@ -9,7 +9,14 @@ from apps.accounts.models import AuditLog, Officer
 @admin.register(Officer)
 class OfficerAdmin(UserAdmin):
     model = Officer
-    list_display = ["employee_id", "full_name", "role", "location", "is_active", "created_at"]
+    list_display = [
+        "employee_id",
+        "full_name",
+        "role",
+        "location",
+        "is_active",
+        "created_at",
+    ]
     list_filter = ["role", "is_active", "location"]
     search_fields = ["employee_id", "full_name", "email", "phone"]
     ordering = ["full_name"]
@@ -27,18 +34,44 @@ class OfficerAdmin(UserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("employee_id", "full_name", "role", "location", "password1", "password2"),
+                "fields": (
+                    "employee_id",
+                    "full_name",
+                    "role",
+                    "location",
+                    "password1",
+                    "password2",
+                ),
             },
         ),
     )
-    readonly_fields = ["created_at", "updated_at", "last_login", "failed_login_attempts", "locked_until"]
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+        "last_login",
+        "failed_login_attempts",
+        "locked_until",
+    ]
 
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    list_display = ["timestamp", "officer", "action", "plate_number", "control_number", "result", "ip_address"]
+    list_display = [
+        "timestamp",
+        "officer",
+        "action",
+        "plate_number",
+        "control_number",
+        "result",
+        "ip_address",
+    ]
     list_filter = ["action", "result"]
-    search_fields = ["officer__employee_id", "plate_number", "control_number", "ip_address"]
+    search_fields = [
+        "officer__employee_id",
+        "plate_number",
+        "control_number",
+        "ip_address",
+    ]
     readonly_fields = [f.name for f in AuditLog._meta.fields]
     ordering = ["-timestamp"]
 

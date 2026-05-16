@@ -32,7 +32,9 @@ def officer(db):
 def tokens(api, officer):
     """Return access + refresh tokens for the test officer."""
     url = reverse("auth-login")
-    resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+    resp = api.post(
+        url, {"employee_id": officer.employee_id, "password": "SecurePass123!"}
+    )
     assert resp.status_code == 200, resp.data
     return resp.data["access"], resp.data["refresh"]
 
@@ -43,7 +45,9 @@ def tokens(api, officer):
 class TestLogin:
     def test_valid_credentials_returns_tokens_and_profile(self, api, officer):
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "SecurePass123!"}
+        )
         assert resp.status_code == 200
         assert "access" in resp.data
         assert "refresh" in resp.data
@@ -52,7 +56,9 @@ class TestLogin:
 
     def test_wrong_password_returns_401(self, api, officer):
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "WrongPassword!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "WrongPassword!"}
+        )
         assert resp.status_code == 401
         assert resp.data["error"] == "invalid_credentials"
         assert "remaining_attempts" in resp.data
@@ -81,7 +87,9 @@ class TestLogin:
         officer.save()
 
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "SecurePass123!"}
+        )
         assert resp.status_code == 200
         officer.refresh_from_db()
         assert officer.failed_login_attempts == 0
@@ -113,7 +121,9 @@ class TestLockout:
         officer.save()
 
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "SecurePass123!"}
+        )
         assert resp.status_code == 401
         assert resp.data["error"] == "account_locked"
 

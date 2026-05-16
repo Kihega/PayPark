@@ -18,16 +18,36 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ControlNumber",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("control_number", models.CharField(blank=True, db_index=True, max_length=30, unique=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "control_number",
+                    models.CharField(
+                        blank=True, db_index=True, max_length=30, unique=True
+                    ),
+                ),
                 ("plate_number", models.CharField(db_index=True, max_length=20)),
                 ("amount_due", models.DecimalField(decimal_places=2, max_digits=10)),
-                ("generated_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                (
+                    "generated_at",
+                    models.DateTimeField(auto_now_add=True, db_index=True),
+                ),
                 ("expires_at", models.DateTimeField(db_index=True)),
                 (
                     "status",
                     models.CharField(
-                        choices=[("ACTIVE", "Active"), ("EXPIRED", "Expired"), ("PAID", "Paid")],
+                        choices=[
+                            ("ACTIVE", "Active"),
+                            ("EXPIRED", "Expired"),
+                            ("PAID", "Paid"),
+                        ],
                         db_index=True,
                         default="ACTIVE",
                         max_length=10,
@@ -75,10 +95,17 @@ class Migration(migrations.Migration):
                 "ordering": ["-generated_at"],
                 "indexes": [
                     models.Index(
-                        fields=["plate_number", "status", "expires_at"], name="billing_con_plate_n_aee46b_idx"
+                        fields=["plate_number", "status", "expires_at"],
+                        name="billing_con_plate_n_aee46b_idx",
                     ),
-                    models.Index(fields=["officer", "generated_at"], name="billing_con_officer_d77147_idx"),
-                    models.Index(fields=["status", "expires_at"], name="billing_con_status_9da550_idx"),
+                    models.Index(
+                        fields=["officer", "generated_at"],
+                        name="billing_con_officer_d77147_idx",
+                    ),
+                    models.Index(
+                        fields=["status", "expires_at"],
+                        name="billing_con_status_9da550_idx",
+                    ),
                 ],
             },
         ),

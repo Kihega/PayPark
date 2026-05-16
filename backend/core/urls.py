@@ -18,7 +18,11 @@ def health_check(request):
             "service": "ParkiPay API",
             "version": "1.0.0",
             "timestamp": timezone.now().isoformat(),
-            "environment": "production" if not __import__("django").conf.settings.DEBUG else "development",
+            "environment": (
+                "production"
+                if not __import__("django").conf.settings.DEBUG
+                else "development"
+            ),
         },
         status=200,
     )

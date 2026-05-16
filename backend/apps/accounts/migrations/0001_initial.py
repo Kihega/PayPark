@@ -18,7 +18,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="Officer",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 ("password", models.CharField(max_length=128, verbose_name="password")),
                 (
                     "is_superuser",
@@ -101,7 +109,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="AuditLog",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 (
                     "action",
                     models.CharField(
@@ -120,7 +136,10 @@ class Migration(migrations.Migration):
                         max_length=40,
                     ),
                 ),
-                ("plate_number", models.CharField(blank=True, db_index=True, max_length=20)),
+                (
+                    "plate_number",
+                    models.CharField(blank=True, db_index=True, max_length=20),
+                ),
                 ("control_number", models.CharField(blank=True, max_length=30)),
                 ("result", models.CharField(blank=True, max_length=40)),
                 ("ip_address", models.GenericIPAddressField(blank=True, null=True)),
@@ -143,8 +162,14 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Audit Logs",
                 "ordering": ["-timestamp"],
                 "indexes": [
-                    models.Index(fields=["officer", "timestamp"], name="accounts_au_officer_1fd0f6_idx"),
-                    models.Index(fields=["action", "timestamp"], name="accounts_au_action_11cc52_idx"),
+                    models.Index(
+                        fields=["officer", "timestamp"],
+                        name="accounts_au_officer_1fd0f6_idx",
+                    ),
+                    models.Index(
+                        fields=["action", "timestamp"],
+                        name="accounts_au_action_11cc52_idx",
+                    ),
                 ],
             },
         ),

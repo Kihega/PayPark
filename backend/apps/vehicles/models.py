@@ -33,8 +33,12 @@ class ParkingLocation(models.Model):
     address = models.TextField(blank=True)
 
     # Coordinates for future map integration
-    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    latitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True
+    )
 
     # Parking fees (TZS) by vehicle category
     fee_motorcycle = models.DecimalField(max_digits=10, decimal_places=2, default=500)
