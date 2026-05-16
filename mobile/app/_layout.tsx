@@ -18,7 +18,7 @@ export default function RootLayout() {
   // Restore auth session from SecureStore on first render
   useEffect(() => {
     loadStoredAuth();
-  }, []);
+  }, [loadStoredAuth]);
 
   // Navigate once auth state is resolved
   useEffect(() => {

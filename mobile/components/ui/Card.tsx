@@ -3,8 +3,7 @@
  * Standard elevated card with optional accent strip (green/yellow/black).
  */
 import { StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
-import { Colors, Radius, Shadows, Spacing } from '@/constants/theme';
-import { SprintColors } from '@/constants/theme';
+import { Colors, Radius, Shadows, Spacing , SprintColors } from '@/constants/theme';
 
 type AccentColor = 'green' | 'yellow' | 'black' | 'none';
 

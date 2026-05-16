@@ -179,15 +179,18 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.MIGRATE_HEADING("\n🌱  ParkiPay Dev Data Seed\n"))
+        self.stdout.write(self.style.MIGRATE_HEADING(
+            "\n🌱  ParkiPay Dev Data Seed\n"))
 
         with transaction.atomic():
             if options["reset"]:
                 self.stdout.write("  → Clearing existing data...")
                 Vehicle.objects.all().delete()
-                Officer.objects.filter(employee_id__in=[o["employee_id"] for o in OFFICERS]).delete()
+                Officer.objects.filter(
+                    employee_id__in=[o["employee_id"] for o in OFFICERS]).delete()
                 ParkingLocation.objects.all().delete()
-                self.stdout.write(self.style.WARNING("  → Existing seed data cleared.\n"))
+                self.stdout.write(self.style.WARNING(
+                    "  → Existing seed data cleared.\n"))
 
             # ── Parking Locations ─────────────────────────────────────────────
             self.stdout.write("  → Creating parking locations...")
@@ -199,15 +202,18 @@ class Command(BaseCommand):
                     defaults=loc_data,
                 )
                 created_locations.append(loc)
-                status = self.style.SUCCESS("created") if created else "already exists"
-                self.stdout.write(f"     {'✅' if created else '⏭ '} {loc.name} — {status}")
+                status = self.style.SUCCESS(
+                    "created") if created else "already exists"
+                self.stdout.write(
+                    f"     {'✅' if created else '⏭ '} {loc.name} — {status}")
 
             # ── Officers ──────────────────────────────────────────────────────
             self.stdout.write("\n  → Creating officers...")
             for off_data in OFFICERS:
                 location = None
                 if "location_index" in off_data:
-                    location = created_locations[off_data.pop("location_index")]
+                    location = created_locations[off_data.pop(
+                        "location_index")]
 
                 password = off_data.pop("password")
                 is_superuser = off_data.pop("is_superuser", False)
@@ -225,7 +231,8 @@ class Command(BaseCommand):
                 if created:
                     officer.set_password(password)
                     officer.save()
-                status = self.style.SUCCESS("created") if created else "already exists"
+                status = self.style.SUCCESS(
+                    "created") if created else "already exists"
                 self.stdout.write(
                     f"     {'✅' if created else '⏭ '} {officer.full_name}"
                     f" [{officer.role}]  login: {officer.employee_id} / {password if created else '(unchanged)'}"
@@ -247,7 +254,8 @@ class Command(BaseCommand):
                         "category": v["category"],
                     },
                 )
-                status = self.style.SUCCESS("created") if created else "already exists"
+                status = self.style.SUCCESS(
+                    "created") if created else "already exists"
                 self.stdout.write(
                     f"     {'✅' if created else '⏭ '} {vehicle.plate_number}"
                     f" — {vehicle.make} {vehicle.model} ({vehicle.category}) — {status}"

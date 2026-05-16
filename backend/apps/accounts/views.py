@@ -69,7 +69,8 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        log_action(request.user, AuditLog.Action.LOGOUT, result="success", request=request)
+        log_action(request.user, AuditLog.Action.LOGOUT,
+                   result="success", request=request)
         return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
 
 

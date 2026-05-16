@@ -69,7 +69,7 @@ export default function SplashScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [dotScale, glowOpacity, taglineOpacity, wordmarkOpacity, wordmarkScale]);
 
   return (
     <View style={styles.container}>
@@ -174,7 +174,7 @@ function LoadingDot({ delay }: { delay: number }) {
     );
     pulse.start();
     return () => pulse.stop();
-  }, []);
+  }, [delay, opacity]);
 
   return (
     <Animated.View

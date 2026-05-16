@@ -12,7 +12,7 @@ import { useAuthStore } from '@/store/authStore';
 
 // ── Axios instance ────────────────────────────────────────────────────────────
 
-export const apiClient = axios.create({
+export const apiClient = create({
   baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
@@ -34,10 +34,10 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 // ── Response interceptor: silent token refresh on 401 ────────────────────────
 
 let isRefreshing = false;
-let failedQueue: Array<{
+let failedQueue: {
   resolve: (token: string) => void;
   reject: (err: unknown) => void;
-}> = [];
+}[] = [];
 
 const processQueue = (error: unknown, token: string | null) => {
   failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token!)));

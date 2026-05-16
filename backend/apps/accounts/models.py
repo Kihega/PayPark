@@ -150,7 +150,8 @@ class AuditLog(models.Model):
         blank=True,
         related_name="audit_logs",
     )
-    action = models.CharField(max_length=40, choices=Action.choices, db_index=True)
+    action = models.CharField(
+        max_length=40, choices=Action.choices, db_index=True)
     plate_number = models.CharField(max_length=20, blank=True, db_index=True)
     control_number = models.CharField(max_length=30, blank=True)
     result = models.CharField(max_length=40, blank=True)
@@ -184,7 +185,8 @@ def log_action(officer, action, *, plate_number="", control_number="", result=""
     ua = ""
     if request:
         x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        ip = x_forwarded.split(",")[0].strip() if x_forwarded else request.META.get("REMOTE_ADDR")
+        ip = x_forwarded.split(",")[0].strip(
+        ) if x_forwarded else request.META.get("REMOTE_ADDR")
         ua = request.META.get("HTTP_USER_AGENT", "")[:300]
 
     try:

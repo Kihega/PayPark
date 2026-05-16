@@ -18,21 +18,29 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ControlNumber',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('control_number', models.CharField(blank=True, db_index=True, max_length=30, unique=True)),
+                ('id', models.BigAutoField(auto_created=True,
+                 primary_key=True, serialize=False, verbose_name='ID')),
+                ('control_number', models.CharField(blank=True,
+                 db_index=True, max_length=30, unique=True)),
                 ('plate_number', models.CharField(db_index=True, max_length=20)),
-                ('amount_due', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('generated_at', models.DateTimeField(auto_now_add=True, db_index=True)),
+                ('amount_due', models.DecimalField(
+                    decimal_places=2, max_digits=10)),
+                ('generated_at', models.DateTimeField(
+                    auto_now_add=True, db_index=True)),
                 ('expires_at', models.DateTimeField(db_index=True)),
-                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('EXPIRED', 'Expired'), ('PAID', 'Paid')], db_index=True, default='ACTIVE', max_length=10)),
+                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('EXPIRED', 'Expired'), (
+                    'PAID', 'Paid')], db_index=True, default='ACTIVE', max_length=10)),
                 ('sms_sent', models.BooleanField(default=False)),
                 ('email_sent', models.BooleanField(default=False)),
                 ('sms_error', models.CharField(blank=True, max_length=300)),
                 ('notes', models.TextField(blank=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('location', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='control_numbers', to='vehicles.parkinglocation')),
-                ('officer', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='bills_generated', to=settings.AUTH_USER_MODEL)),
-                ('vehicle', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='control_numbers', to='vehicles.vehicle')),
+                ('location', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                 related_name='control_numbers', to='vehicles.parkinglocation')),
+                ('officer', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                 related_name='bills_generated', to=settings.AUTH_USER_MODEL)),
+                ('vehicle', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                 related_name='control_numbers', to='vehicles.vehicle')),
             ],
             options={
                 'verbose_name': 'Control Number',

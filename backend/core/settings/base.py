@@ -16,7 +16,8 @@ SECRET_KEY = config(
     "SECRET_KEY",
     default="unsafe-dev-key"
 )
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv(), default="localhost,127.0.0.1")
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv(),
+                       default="localhost,127.0.0.1")
 
 # ── Apps ──────────────────────────────────────────────────────────────────────
 DJANGO_APPS = [
@@ -91,7 +92,8 @@ def _parse_db_url(url: str) -> dict:
       sqlite:///path/to/db.sqlite3  (CI / local fallback)
     """
     if url.startswith("sqlite"):
-        path = url.split("sqlite:///", 1)[1] if ":///" in url else url.split("sqlite://", 1)[1]
+        path = url.split(
+            "sqlite:///", 1)[1] if ":///" in url else url.split("sqlite://", 1)[1]
         return {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / path if not path.startswith("/") else path,
@@ -131,7 +133,8 @@ AUTHENTICATION_BACKENDS = [
 # ── Password Validation ───────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
@@ -165,7 +168,8 @@ REST_FRAMEWORK = {
 # ── JWT ───────────────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(
-        minutes=config("JWT_ACCESS_TOKEN_LIFETIME_MINUTES", cast=int, default=60)
+        minutes=config("JWT_ACCESS_TOKEN_LIFETIME_MINUTES",
+                       cast=int, default=60)
     ),
     "REFRESH_TOKEN_LIFETIME": timedelta(
         days=config("JWT_REFRESH_TOKEN_LIFETIME_DAYS", cast=int, default=7)
@@ -203,9 +207,12 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── App-specific config ───────────────────────────────────────────────────────
-CONTROL_NUMBER_VALIDITY_HOURS = config("CONTROL_NUMBER_VALIDITY_HOURS", cast=int, default=5)
-MAX_FAILED_LOGIN_ATTEMPTS = config("MAX_FAILED_LOGIN_ATTEMPTS", cast=int, default=5)
-LOCKOUT_DURATION_MINUTES = config("LOCKOUT_DURATION_MINUTES", cast=int, default=15)
+CONTROL_NUMBER_VALIDITY_HOURS = config(
+    "CONTROL_NUMBER_VALIDITY_HOURS", cast=int, default=5)
+MAX_FAILED_LOGIN_ATTEMPTS = config(
+    "MAX_FAILED_LOGIN_ATTEMPTS", cast=int, default=5)
+LOCKOUT_DURATION_MINUTES = config(
+    "LOCKOUT_DURATION_MINUTES", cast=int, default=15)
 
 # ── Notifications ─────────────────────────────────────────────────────────────
 AT_USERNAME = config("AT_USERNAME", default="sandbox")

@@ -30,16 +30,24 @@ class ParkingLocation(models.Model):
     address = models.TextField(blank=True)
 
     # Coordinates for future map integration
-    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    latitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(
+        max_digits=10, decimal_places=7, null=True, blank=True)
 
     # Parking fees (TZS) by vehicle category
-    fee_motorcycle = models.DecimalField(max_digits=10, decimal_places=2, default=500)
-    fee_private_car = models.DecimalField(max_digits=10, decimal_places=2, default=1000)
-    fee_minibus = models.DecimalField(max_digits=10, decimal_places=2, default=2000)
-    fee_bus = models.DecimalField(max_digits=10, decimal_places=2, default=3000)
-    fee_truck = models.DecimalField(max_digits=10, decimal_places=2, default=5000)
-    fee_government = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    fee_motorcycle = models.DecimalField(
+        max_digits=10, decimal_places=2, default=500)
+    fee_private_car = models.DecimalField(
+        max_digits=10, decimal_places=2, default=1000)
+    fee_minibus = models.DecimalField(
+        max_digits=10, decimal_places=2, default=2000)
+    fee_bus = models.DecimalField(
+        max_digits=10, decimal_places=2, default=3000)
+    fee_truck = models.DecimalField(
+        max_digits=10, decimal_places=2, default=5000)
+    fee_government = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0)
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -91,7 +99,8 @@ class Vehicle(models.Model):
 
     # Vehicle details
     make = models.CharField(max_length=60, blank=True, help_text="e.g. Toyota")
-    model = models.CharField(max_length=60, blank=True, help_text="e.g. Corolla")
+    model = models.CharField(max_length=60, blank=True,
+                             help_text="e.g. Corolla")
     color = models.CharField(max_length=40, blank=True)
     year = models.PositiveSmallIntegerField(null=True, blank=True)
     category = models.CharField(

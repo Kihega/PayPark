@@ -30,7 +30,8 @@ def officer(db):
 def tokens(api, officer):
     """Return access + refresh tokens for the test officer."""
     url = reverse("auth-login")
-    resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+    resp = api.post(
+        url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
     assert resp.status_code == 200, resp.data
     return resp.data["access"], resp.data["refresh"]
 
@@ -40,7 +41,8 @@ def tokens(api, officer):
 class TestLogin:
     def test_valid_credentials_returns_tokens_and_profile(self, api, officer):
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
         assert resp.status_code == 200
         assert "access" in resp.data
         assert "refresh" in resp.data
@@ -49,14 +51,16 @@ class TestLogin:
 
     def test_wrong_password_returns_401(self, api, officer):
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "WrongPassword!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "WrongPassword!"})
         assert resp.status_code == 401
         assert resp.data["error"] == "invalid_credentials"
         assert "remaining_attempts" in resp.data
 
     def test_unknown_employee_id_returns_401(self, api, db):
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": "GHOST-999", "password": "anything"})
+        resp = api.post(
+            url, {"employee_id": "GHOST-999", "password": "anything"})
         assert resp.status_code == 401
         assert resp.data["error"] == "invalid_credentials"
 
@@ -68,7 +72,8 @@ class TestLogin:
 
     def test_login_increments_failed_attempts(self, api, officer):
         url = reverse("auth-login")
-        api.post(url, {"employee_id": officer.employee_id, "password": "wrong"})
+        api.post(
+            url, {"employee_id": officer.employee_id, "password": "wrong"})
         officer.refresh_from_db()
         assert officer.failed_login_attempts == 1
 
@@ -78,7 +83,8 @@ class TestLogin:
         officer.save()
 
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
         assert resp.status_code == 200
         officer.refresh_from_db()
         assert officer.failed_login_attempts == 0
@@ -90,10 +96,12 @@ class TestLockout:
     def test_account_locks_after_5_failed_attempts(self, api, officer):
         url = reverse("auth-login")
         for _ in range(5):
-            api.post(url, {"employee_id": officer.employee_id, "password": "wrong"})
+            api.post(
+                url, {"employee_id": officer.employee_id, "password": "wrong"})
 
         # 6th attempt should be blocked with lockout error
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "wrong"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "wrong"})
         assert resp.status_code == 401
         assert resp.data["error"] == "account_locked"
         assert "locked_until" in resp.data
@@ -107,7 +115,8 @@ class TestLockout:
         officer.save()
 
         url = reverse("auth-login")
-        resp = api.post(url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
+        resp = api.post(
+            url, {"employee_id": officer.employee_id, "password": "SecurePass123!"})
         assert resp.status_code == 401
         assert resp.data["error"] == "account_locked"
 
