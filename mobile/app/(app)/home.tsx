@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appBarTitle: {
-    fontSize: FontSize.xxxl,
+    fontSize: FontSize["3xl"],
     fontWeight: FontWeight.bold,
     color: Colors.white,
     letterSpacing: LetterSpacing.tight,
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: SprintColors.green,
-    fontWeight: FontWeight.semibold,
+    fontWeight: FontWeight.semiBold,
   },
   body: {
     padding: Spacing.lg,
@@ -206,13 +206,13 @@ const styles = StyleSheet.create({
   },
   roleChipText: {
     color: Colors.white,
-    fontWeight: FontWeight.semibold,
+    fontWeight: FontWeight.semiBold,
     fontSize: FontSize.sm,
   },
   welcomeText: {
-    fontSize: FontSize.xxl,
+    fontSize: FontSize["2xl"],
     fontWeight: FontWeight.bold,
-    color: Colors.text,
+    color: Colors.textPrimary,
     lineHeight: 34,
   },
   section: {
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold,
     marginBottom: Spacing.md,
-    color: Colors.text,
+    color: Colors.textPrimary,
   },
   zoneCard: {
     backgroundColor: Colors.white,
@@ -234,6 +234,6 @@ const styles = StyleSheet.create({
   zoneText: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.medium,
-    color: Colors.text,
+    color: Colors.textPrimary,
   },
 });

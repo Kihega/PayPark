@@ -6,13 +6,17 @@
  * - Silent 401 → refresh → retry logic
  * - Logout on unrecoverable 401
  */
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosResponse,
+  AxiosError,
+  InternalAxiosRequestConfig,
+} from 'axios';
 import { API_BASE_URL, API_ROUTES } from '@/constants/api';
 import { useAuthStore } from '@/store/authStore';
 
 // ── Axios instance ────────────────────────────────────────────────────────────
 
-export const apiClient = create({
+export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
@@ -45,7 +49,7 @@ const processQueue = (error: unknown, token: string | null) => {
 };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response: AxiosResponse) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
