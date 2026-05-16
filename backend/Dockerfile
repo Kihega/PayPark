@@ -22,7 +22,7 @@ COPY . .
 ENV SECRET_KEY=dummysecret
 # Static files
 RUN mkdir -p staticfiles && \
-    DJANGO_ENV=production python manage.py collectstatic --noinput || true
+    DJANGO_ENV=local python manage.py collectstatic --noinput || true
 
 # Correct ownership
 RUN chown -R parkipay:parkipay /app

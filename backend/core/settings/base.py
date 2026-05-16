@@ -80,7 +80,7 @@ TEMPLATES = [
 ]
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_URL = config("DATABASE_URL")
+DATABASE_URL = config("DATABASE_URL", default="sqlite:///tmp/build.db")
 
 
 def _parse_db_url(url: str) -> dict:
