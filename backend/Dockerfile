@@ -1,34 +1,35 @@
-# ── ParkiPay Backend Dockerfile ───────────────────────────────────────────────
-FROM python:3.12-slim AS base
-
-# Non-root user for security
-RUN groupadd -r parkipay && useradd -r -g parkipay parkipay
-
+# ── ParkiPay Backend — Node 20 Alpine ────────────────────────────────────────
+FROM node:20-alpine AS base
 WORKDIR /app
 
-# System dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Install OS deps needed by Prisma
+RUN apk add --no-cache openssl
 
-# Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+# ── Dependencies ──────────────────────────────────────────────────────────────
+FROM base AS deps
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Copy source
-COPY . .
-ENV SECRET_KEY=dummysecret
-# Static files
-RUN mkdir -p staticfiles && \
-    DJANGO_ENV=local python manage.py collectstatic --noinput || true
+# ── Build / generate Prisma client ────────────────────────────────────────────
+FROM deps AS builder
+COPY prisma ./prisma
+RUN npx prisma generate
 
-# Correct ownership
+# ── Final image ───────────────────────────────────────────────────────────────
+FROM base AS runner
+ENV NODE_ENV=production
+
+# Create non-root user
+RUN addgroup -S parkipay && adduser -S parkipay -G parkipay
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY prisma   ./prisma
+COPY src      ./src
+COPY entrypoint.sh ./entrypoint.sh
+
 RUN chown -R parkipay:parkipay /app
-
 USER parkipay
 
 EXPOSE 8000
-
 ENTRYPOINT ["./entrypoint.sh"]
