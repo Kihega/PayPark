@@ -1,6 +1,10 @@
 """ParkiPay — Custom DRF Exception Handler"""
 from rest_framework.views import exception_handler
+
+
 def custom_exception_handler(exc, context):
+
+
     """
     Wraps all DRF error responses in a consistent envelope:
     { "error": "<code>", "detail": "<message>" }
