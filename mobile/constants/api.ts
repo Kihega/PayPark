@@ -5,6 +5,7 @@
 
 // In production, override via eas.json or app.config.ts environment variables
 const DEV_API_URL = 'http://localhost:8000';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const STAGING_API_URL = 'https://parkipay-api.onrender.com';
 
 export const API_BASE_URL =

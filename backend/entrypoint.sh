@@ -1,16 +1,9 @@
-#!/bin/bash
-# ParkiPay — Docker Entrypoint
+#!/bin/sh
+# ParkiPay — Docker Entrypoint (Express)
 set -e
 
-echo "==> Running database migrations..."
-python manage.py migrate --noinput
+echo "==> Running Prisma migrations..."
+npx prisma migrate deploy
 
-echo "==> Starting Gunicorn..."
-exec gunicorn core.wsgi:application \
-    --bind 0.0.0.0:8000 \
-    --workers 2 \
-    --worker-class sync \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level info
+echo "==> Starting server..."
+exec node src/server.js

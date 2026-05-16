@@ -95,7 +95,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      {/* ── App Bar ──────────────────────────────────────────────────── */}
       <LinearGradient
         colors={[SprintColors.green, SprintColors.greenDark]}
         start={{ x: 0, y: 0 }}
@@ -107,6 +106,7 @@ export default function HomeScreen() {
             <Text style={styles.appBarTitle}>ParkiPay</Text>
             <Text style={styles.appBarDate}>{today}</Text>
           </View>
+
           <TouchableOpacity
             onPress={handleLogout}
             disabled={isLoggingOut}
@@ -121,268 +121,119 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-
-        {/* ── Welcome banner ───────────────────────────────────────── */}
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.welcomeCard}>
           <View style={[styles.roleChip, { backgroundColor: roleColor }]}>
             <Text style={styles.roleChipText}>{roleLabel}</Text>
           </View>
-          <Text style={styles.welcomeName}>Karibu, {officer.full_name.split(' ')[0]} 👋</Text>
-          <Text style={styles.welcomeId}>ID: {officer.employee_id}</Text>
-          {officer.location_name && (
-            <Text style={styles.welcomeLocation}>📍 {officer.location_name}</Text>
-          )}
+
+          <Text style={styles.welcomeText}>
+            Karibu,
+            {'\n\n'}
+            {officer.full_name.split(' ')[0]}
+          </Text>
         </View>
 
-        {/* ── Sprint 2 placeholder ──────────────────────────────────── */}
-        <View style={styles.placeholderCard}>
-          <LinearGradient
-            colors={[`${SprintColors.yellow}22`, `${SprintColors.green}11`]}
-            style={styles.placeholderGradient}
-          >
-            <Text style={styles.placeholderIcon}>🚧</Text>
-            <Text style={styles.placeholderTitle}>Sprint 2 Coming Next</Text>
-            <Text style={styles.placeholderBody}>
-              Vehicle Plate Verification module will replace this screen.{'\n\n'}
-              The officer will be able to:{'\n'}
-              • Enter / scan a plate number{'\n'}
-              • Verify vehicle details from registry{'\n'}
-              • Generate a parking control number{'\n'}
-              • Prevent duplicate billing across all officers
-            </Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Assigned Zones</Text>
 
-            {/* Sprint progress indicator */}
-            <View style={styles.sprintRow}>
-              {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((s, i) => (
-                <View
-                  key={s}
-                  style={[
-                    styles.sprintDot,
-                    i <= 1
-                      ? { backgroundColor: SprintColors.green }
-                      : { backgroundColor: Colors.grey200 },
-                  ]}
-                >
-                  <Text style={[styles.sprintLabel, i <= 1 ? { color: Colors.white } : {}]}>
-                    {s}
-                  </Text>
-                </View>
-              ))}
+          {['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((zone) => (
+            <View key={zone} style={styles.zoneCard}>
+              <Text style={styles.zoneText}>{zone}</Text>
             </View>
-          </LinearGradient>
+          ))}
         </View>
-
-        {/* ── Quick stats placeholder ───────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Today's Activity</Text>
-        <View style={styles.statsRow}>
-          <StatCard label="Bills Generated" value="—" color={SprintColors.green} />
-          <StatCard label="Total Collected" value="—" color={SprintColors.yellow} />
-        </View>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <View style={[styles.statCard, Shadows.sm]}>
-      <View style={[styles.statAccent, { backgroundColor: color }]} />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: Colors.background,
   },
-
-  // App bar
   appBar: {
-    paddingTop: 48,
-    paddingBottom: Spacing.base,
-    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
   },
-
   appBarContent: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-
   appBarTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.black,
+    fontSize: FontSize["3xl"],
+    fontWeight: FontWeight.bold,
     color: Colors.white,
-    letterSpacing: LetterSpacing.display,
+    letterSpacing: LetterSpacing.tight,
   },
-
   appBarDate: {
-    fontSize: FontSize.xs,
-    color: `${Colors.white}BB`,
-    marginTop: 2,
+    fontSize: FontSize.sm,
+    color: Colors.white,
+    marginTop: 4,
   },
-
   logoutButton: {
     backgroundColor: Colors.white,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: Radius.full,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.base,
-    minWidth: 60,
-    alignItems: 'center',
   },
-
   logoutButtonText: {
     color: SprintColors.green,
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.semiBold,
   },
-
-  // Body
   body: {
-    padding: Spacing.base,
-    gap: Spacing.base,
-    paddingBottom: Spacing['3xl'],
+    padding: Spacing.lg,
   },
-
-  // Welcome card
   welcomeCard: {
     backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Spacing.xl,
+    marginBottom: Spacing.lg,
     ...Shadows.md,
   },
-
   roleChip: {
     alignSelf: 'flex-start',
-    paddingVertical: 3,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
     borderRadius: Radius.full,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-
   roleChipText: {
     color: Colors.white,
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    fontWeight: FontWeight.semiBold,
+    fontSize: FontSize.sm,
   },
-
-  welcomeName: {
-    fontSize: FontSize.xl,
+  welcomeText: {
+    fontSize: FontSize["2xl"],
     fontWeight: FontWeight.bold,
     color: Colors.textPrimary,
-    marginBottom: 4,
+    lineHeight: 34,
   },
-
-  welcomeId: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    letterSpacing: LetterSpacing.extraWide,
-    marginBottom: 4,
+  section: {
+    marginTop: Spacing.md,
   },
-
-  welcomeLocation: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-  },
-
-  // Placeholder card
-  placeholderCard: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    ...Shadows.sm,
-  },
-
-  placeholderGradient: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-  },
-
-  placeholderIcon: {
-    fontSize: 40,
-    marginBottom: Spacing.sm,
-  },
-
-  placeholderTitle: {
+  sectionTitle: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold,
+    marginBottom: Spacing.md,
     color: Colors.textPrimary,
-    marginBottom: Spacing.sm,
   },
-
-  placeholderBody: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-
-  sprintRow: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-  },
-
-  sprintDot: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.grey200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  sprintLabel: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: Colors.grey500,
-  },
-
-  // Stats
-  sectionTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semiBold,
-    color: Colors.textPrimary,
-    marginTop: Spacing.xs,
-  },
-
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-
-  statCard: {
-    flex: 1,
+  zoneCard: {
     backgroundColor: Colors.white,
+    padding: Spacing.lg,
     borderRadius: Radius.lg,
-    padding: Spacing.base,
-    overflow: 'hidden',
-  },
-
-  statAccent: {
-    height: 3,
-    borderRadius: 2,
     marginBottom: Spacing.sm,
+    ...Shadows.sm,
   },
-
-  statValue: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.black,
+  zoneText: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium,
     color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-
-  statLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    letterSpacing: 0.3,
   },
 });

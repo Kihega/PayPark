@@ -6,7 +6,11 @@
  * - Silent 401 → refresh → retry logic
  * - Logout on unrecoverable 401
  */
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosResponse,
+  AxiosError,
+  InternalAxiosRequestConfig,
+} from 'axios';
 import { API_BASE_URL, API_ROUTES } from '@/constants/api';
 import { useAuthStore } from '@/store/authStore';
 
@@ -34,10 +38,10 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 // ── Response interceptor: silent token refresh on 401 ────────────────────────
 
 let isRefreshing = false;
-let failedQueue: Array<{
+let failedQueue: {
   resolve: (token: string) => void;
   reject: (err: unknown) => void;
-}> = [];
+}[] = [];
 
 const processQueue = (error: unknown, token: string | null) => {
   failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token!)));
@@ -45,7 +49,7 @@ const processQueue = (error: unknown, token: string | null) => {
 };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response: AxiosResponse) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
