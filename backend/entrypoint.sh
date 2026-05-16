@@ -3,7 +3,7 @@
 set -e
 
 echo "==> Running database migrations..."
-python manage.py migrate --noinput
+python manage.py migrate --fake-initial --noinput
 
 echo "==> Starting Gunicorn..."
 exec gunicorn core.wsgi:application \
