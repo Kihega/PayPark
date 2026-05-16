@@ -10,7 +10,6 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-
 # ── Control Number Generator ──────────────────────────────────────────────────
 
 def generate_control_number() -> str:

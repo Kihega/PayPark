@@ -4,10 +4,13 @@ Officer: Custom AbstractBaseUser authenticated by employee_id + password.
 AuditLog: Immutable record of every security-relevant action.
 """
 from django.conf import settings
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+)
 from django.db import models
 from django.utils import timezone
-
 
 # ── Officer Manager ───────────────────────────────────────────────────────────
 

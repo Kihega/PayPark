@@ -1,6 +1,7 @@
 """ParkiPay — Django Admin: Vehicles & Locations"""
 from django.contrib import admin
-from apps.vehicles.models import Vehicle, ParkingLocation
+
+from apps.vehicles.models import ParkingLocation, Vehicle
 
 
 @admin.register(ParkingLocation)

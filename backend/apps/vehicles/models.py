@@ -5,7 +5,6 @@ Phase 2: Live integration with BRELA/SUMATRA API.
 """
 from django.db import models
 
-
 # ── Vehicle Category ──────────────────────────────────────────────────────────
 
 class VehicleCategory(models.TextChoices):

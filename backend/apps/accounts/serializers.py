@@ -2,11 +2,10 @@
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from apps.accounts.models import Officer, AuditLog, log_action
-
+from apps.accounts.models import AuditLog, Officer, log_action
 
 # ── Officer Profile Serializer ────────────────────────────────────────────────
 

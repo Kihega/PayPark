@@ -5,16 +5,19 @@ POST /api/auth/refresh/   → Rotate refresh token
 POST /api/auth/logout/    → Blacklist refresh token
 GET  /api/auth/me/        → Officer profile
 """
+from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.accounts.models import AuditLog, log_action
-from apps.accounts.serializers import OfficerProfileSerializer, ParkiPayTokenObtainSerializer
+from apps.accounts.serializers import (
+    OfficerProfileSerializer,
+    ParkiPayTokenObtainSerializer,
+)
 
 
 class LoginView(TokenObtainPairView):

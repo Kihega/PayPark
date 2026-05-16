@@ -6,8 +6,8 @@ Run with: pytest apps/accounts/tests/
 import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
-from apps.accounts.models import Officer, OfficerRole
 
+from apps.accounts.models import Officer, OfficerRole
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +109,7 @@ class TestLockout:
     def test_locked_account_rejects_correct_password(self, api, officer):
         """Even the correct password is rejected while account is locked."""
         from datetime import timedelta
+
         from django.utils import timezone
         officer.failed_login_attempts = 5
         officer.locked_until = timezone.now() + timedelta(minutes=10)

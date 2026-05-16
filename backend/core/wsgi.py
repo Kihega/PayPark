@@ -1,5 +1,6 @@
 """ParkiPay — WSGI entry point for Gunicorn / Render."""
 import os
+
 from django.core.wsgi import get_wsgi_application
 
 env = os.environ.get("DJANGO_ENV", "local")

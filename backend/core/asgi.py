@@ -1,5 +1,6 @@
 """ParkiPay — ASGI entry point (future WebSocket / async support)."""
 import os
+
 from django.core.asgi import get_asgi_application
 
 env = os.environ.get("DJANGO_ENV", "local")

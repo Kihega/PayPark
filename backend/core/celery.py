@@ -3,6 +3,7 @@ ParkiPay — Celery Application
 Handles async tasks: SMS dispatch, email dispatch, control number expiry sweep.
 """
 import os
+
 from celery import Celery
 
 env = os.environ.get("DJANGO_ENV", "local")

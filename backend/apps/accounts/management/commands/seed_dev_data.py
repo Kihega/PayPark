@@ -16,7 +16,6 @@ from django.db import transaction
 from apps.accounts.models import Officer, OfficerRole
 from apps.vehicles.models import ParkingLocation, Vehicle, VehicleCategory
 
-
 LOCATIONS = [
     {
         "name": "Kariakoo Bus Terminal",

@@ -1,6 +1,7 @@
 """ParkiPay — Auth URL Routes"""
 from django.urls import path
-from apps.accounts.views import LoginView, RefreshView, LogoutView, MeView
+
+from apps.accounts.views import LoginView, LogoutView, MeView, RefreshView
 
 urlpatterns = [
     # POST { employee_id, password } → { access, refresh, officer }
