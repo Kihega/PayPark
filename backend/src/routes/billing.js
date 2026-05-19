@@ -1,67 +1,84 @@
 /**
- * ParkiPay — Billing routes (Sprint 3)
- * POST /api/billing/generate/           — global duplicate check + generate
- * GET  /api/billing/history/            — officer daily bill history
- * GET  /api/billing/:cn/status/         — bill status
+ * ParkiPay — Billing routes
+ *
+ * POST /api/billing/generate/        — Global duplicate check + generate CN
+ * GET  /api/billing/history/         — Officer's bill history for today
+ * GET  /api/billing/:cn/status/      — Bill status by control number
  */
-const { Router } = require('express');
-const { z }   = require('zod');
-const prisma  = require('../lib/prisma');
-const logAction = require('../lib/audit');
-const { generateControlNumber, getActiveBillForPlate } = require('../lib/controlNumber');
+const { Router }       = require('express');
+const { z }            = require('zod');
+const prisma           = require('../lib/prisma');
+const logAction        = require('../lib/audit');
 const { authenticate } = require('../middleware/auth');
-const cfg = require('../config');
+const cfg              = require('../config');
+const {
+  generateControlNumber,
+  getActiveBillForPlate,
+} = require('../lib/controlNumber');
 
 const router = Router();
+
+// All billing routes require authentication
 router.use(authenticate);
 
 // ── POST /api/billing/generate/ ───────────────────────────────────────────────
 
 const GenerateSchema = z.object({
-  plate_number: z.string().min(1),
-  location_id:  z.number().int().positive(),
+  plate_number: z.string().min(1, 'plate_number is required'),
+  location_id:  z.number().int().positive('location_id must be a positive integer'),
 });
 
 router.post('/generate/', async (req, res, next) => {
   try {
     const parsed = GenerateSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'validation_error', detail: parsed.error.flatten() });
+      return res.status(400).json({
+        error:  'validation_error',
+        detail: parsed.error.flatten(),
+      });
     }
+
     const { plate_number, location_id } = parsed.data;
     const plate = plate_number.trim().toUpperCase().replace(/\s/g, '');
 
-    // 1. Global duplicate check
+    // ── 1. Global duplicate check (core engine) ────────────────────────────
     const existing = await getActiveBillForPlate(plate);
     if (existing) {
       await logAction(req.officer, logAction.ACTIONS.BILL_DUPLICATE_BLOCKED, {
-        plateNumber: plate,
+        plateNumber:   plate,
         controlNumber: existing.controlNumber,
-        result: 'duplicate_blocked',
+        result:        'duplicate_blocked',
         req,
       });
       return res.status(409).json({
-        error: 'duplicate_bill',
+        error:  'duplicate_bill',
         detail: 'This vehicle already has an active parking bill.',
         existing_bill: {
-          control_number:  existing.controlNumber,
-          expires_at:      existing.expiresAt,
-          issued_by:       existing.officer?.fullName ?? null,
-          location:        existing.location?.name ?? null,
+          control_number: existing.controlNumber,
+          expires_at:     existing.expiresAt,
+          issued_by:      existing.officer?.fullName ?? null,
+          location:       existing.location?.name   ?? null,
         },
       });
     }
 
-    // 2. Validate location
-    const location = await prisma.parkingLocation.findUnique({ where: { id: location_id } });
+    // ── 2. Validate parking location ──────────────────────────────────────
+    const location = await prisma.parkingLocation.findUnique({
+      where: { id: location_id },
+    });
     if (!location || !location.isActive) {
-      return res.status(400).json({ error: 'invalid_location', detail: 'Parking location not found or inactive.' });
+      return res.status(400).json({
+        error:  'invalid_location',
+        detail: 'Parking location not found or inactive.',
+      });
     }
 
-    // 3. Lookup vehicle (optional — bill can be issued without registry hit)
-    const vehicle = await prisma.vehicle.findUnique({ where: { plateNumber: plate } });
+    // ── 3. Optional vehicle registry lookup (bill can proceed without it) ─
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { plateNumber: plate },
+    });
 
-    // 4. Determine fee
+    // ── 4. Determine fee by vehicle category ──────────────────────────────
     const feeMap = {
       MOTORCYCLE:  location.feeMotorcycle,
       PRIVATE_CAR: location.feePrivateCar,
@@ -72,7 +89,7 @@ router.post('/generate/', async (req, res, next) => {
     };
     const amountDue = feeMap[vehicle?.category ?? 'PRIVATE_CAR'] ?? location.feePrivateCar;
 
-    // 5. Create bill
+    // ── 5. Create the bill ─────────────────────────────────────────────────
     const expiresAt = new Date(Date.now() + cfg.billing.validityHours * 3_600_000);
     const bill = await prisma.controlNumber.create({
       data: {
@@ -95,24 +112,32 @@ router.post('/generate/', async (req, res, next) => {
     });
 
     return res.status(201).json(bill);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── GET /api/billing/history/ ─────────────────────────────────────────────────
 
 router.get('/history/', async (req, res, next) => {
   try {
-    const since = new Date();
-    since.setHours(0, 0, 0, 0); // start of today
+    // Return bills generated by this officer since midnight today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
 
     const bills = await prisma.controlNumber.findMany({
-      where: { officerId: req.officer.id, generatedAt: { gte: since } },
-      include: { location: true, vehicle: true },
-      orderBy: { generatedAt: 'desc' },
+      where: {
+        officerId:   req.officer.id,
+        generatedAt: { gte: startOfDay },
+      },
+      include:  { location: true, vehicle: true },
+      orderBy:  { generatedAt: 'desc' },
     });
 
     return res.json(bills);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── GET /api/billing/:cn/status/ ──────────────────────────────────────────────
@@ -120,17 +145,26 @@ router.get('/history/', async (req, res, next) => {
 router.get('/:cn/status/', async (req, res, next) => {
   try {
     const bill = await prisma.controlNumber.findUnique({
-      where: { controlNumber: req.params.cn },
+      where:   { controlNumber: req.params.cn },
       include: { officer: true, location: true },
     });
 
     if (!bill) {
-      return res.status(404).json({ error: 'not_found', detail: 'Control number not found.' });
+      return res.status(404).json({
+        error:  'not_found',
+        detail: 'Control number not found.',
+      });
     }
 
-    const minutesRemaining = Math.max(0, Math.floor((bill.expiresAt - Date.now()) / 60_000));
+    const minutesRemaining = Math.max(
+      0,
+      Math.floor((new Date(bill.expiresAt) - Date.now()) / 60_000),
+    );
+
     return res.json({ ...bill, minutesRemaining });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

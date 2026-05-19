@@ -1,11 +1,16 @@
-// ParkiPay — JWT helpers (access + refresh with rotation & blacklist)
-const jwt  = require('jsonwebtoken');
+// ParkiPay — JWT helpers
+// Access tokens: short-lived (60 min), embed role for fast permission checks.
+// Refresh tokens: long-lived (7 days), include a unique jti (UUID) so they
+//   can be individually blacklisted on logout or rotation.
+const jwt             = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const cfg    = require('../config');
-const prisma = require('./prisma');
+const cfg             = require('../config');
+const prisma          = require('./prisma');
 
 /**
- * Sign an access token — embeds role for fast permission checks.
+ * Sign an access token for the given officer.
+ * @param {object} officer  Prisma Officer row
+ * @returns {string}        Signed JWT string
  */
 function signAccess(officer) {
   return jwt.sign(
@@ -21,7 +26,9 @@ function signAccess(officer) {
 }
 
 /**
- * Sign a refresh token — includes a unique jti so it can be blacklisted.
+ * Sign a refresh token for the given officer.
+ * @param {object} officer  Prisma Officer row
+ * @returns {{ token: string, jti: string }}
  */
 function signRefresh(officer) {
   const jti = uuidv4();
@@ -34,21 +41,29 @@ function signRefresh(officer) {
 }
 
 /**
- * Verify any token. Throws if invalid or expired.
+ * Verify any token — throws JsonWebTokenError or TokenExpiredError on failure.
+ * @param {string} token
+ * @returns {object} decoded payload
  */
 function verify(token) {
   return jwt.verify(token, cfg.jwt.secret);
 }
 
 /**
- * Blacklist a refresh token (prevents reuse after logout / rotation).
+ * Persist a refresh token jti to the blacklist so it cannot be reused.
+ * @param {string} jti       UUID from token payload
+ * @param {number} expiresAt Unix timestamp (seconds) from payload.exp
  */
 async function blacklist(jti, expiresAt) {
-  await prisma.blacklistedToken.create({ data: { jti, expiresAt: new Date(expiresAt * 1000) } });
+  await prisma.blacklistedToken.create({
+    data: { jti, expiresAt: new Date(expiresAt * 1000) },
+  });
 }
 
 /**
- * Returns true if the jti is blacklisted.
+ * Returns true if the jti is in the blacklist (token already used/revoked).
+ * @param {string} jti
+ * @returns {Promise<boolean>}
  */
 async function isBlacklisted(jti) {
   const found = await prisma.blacklistedToken.findUnique({ where: { jti } });
