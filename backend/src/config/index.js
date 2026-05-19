@@ -45,13 +45,22 @@ const cfg = {
   },
 
   // ── CORS ──────────────────────────────────────────────
-  corsOrigins: (
-    process.env.CORS_ALLOWED_ORIGINS ||
-    'http://localhost:8081'
-  )
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean),
+  corsOrigins: (() => {
+    const origins = (
+      process.env.CORS_ALLOWED_ORIGINS ||
+      'http://localhost:8081,http://localhost:19006,exp://localhost:19000'
+    )
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    
+    // If in development, also accept network IPs
+    if (process.env.NODE_ENV === 'development') {
+      origins.push(/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)([0-9]{1,3}\.){2}[0-9]{1,3}:[0-9]+$/);
+    }
+    
+    return origins;
+  })(),
 
   // ── Auth Policy ───────────────────────────────────────
   auth: {
