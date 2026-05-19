@@ -1,47 +1,61 @@
 version: "3.9"
 
 # ParkiPay — Local Development Docker Compose
-# Run with: docker-compose up --build
-# Connects to Supabase PostgreSQL remotely (set DATABASE_URL in .env)
+#
+# Starts two services:
+#   api      — Express server with hot reload (nodemon)
+#   postgres — Local PostgreSQL 16 instance
+#
+# Usage:
+#   docker-compose up --build         # first run
+#   docker-compose up                 # subsequent runs
+#   docker-compose exec api npm run db:seed   # seed test users
+#
+# The DATABASE_URL in .env is overridden below to point at the local
+# postgres service. All other env vars come from .env.
 
 services:
-  # ── Django API ─────────────────────────────────────────────────────────────
+
+  # ── Express API ─────────────────────────────────────────────────────────────
   api:
-    build: .
+    build:
+      context: .
+      target: deps          # use the deps stage for dev (has devDependencies)
     command: >
-      sh -c "python manage.py migrate --noinput &&
-             python manage.py runserver 0.0.0.0:8000"
+      sh -c "npx prisma migrate deploy &&
+             npx nodemon src/server.js"
     volumes:
       - .:/app
+      - /app/node_modules   # prevent host node_modules from overwriting container's
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
-      - DJANGO_ENV=local
-      - REDIS_URL=redis://redis:6379/0
+      NODE_ENV: development
+      DATABASE_URL: postgresql://parkipay:parkipay@postgres:5432/parkipay
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
-  # ── Redis (Celery broker + JWT blacklist) ──────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-
-  # ── Celery Worker ─────────────────────────────────────────────────────────
-  celery:
-    build: .
-    command: celery -A core worker --loglevel=info
-    volumes:
-      - .:/app
-    env_file:
-      - .env
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
     environment:
-      - DJANGO_ENV=local
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
+      POSTGRES_DB:       parkipay
+      POSTGRES_USER:     parkipay
+      POSTGRES_PASSWORD: parkipay
+    ports:
+      - "5432:5432"          # expose locally so you can use Prisma Studio
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parkipay -d parkipay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
+
+volumes:
+  postgres_data:

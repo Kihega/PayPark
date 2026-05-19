@@ -1,16 +1,20 @@
 {
   "name": "parkipay-api",
   "version": "1.0.0",
-  "description": "ParkiPay REST API — Express + Prisma",
+  "description": "ParkiPay REST API — Node.js + Express + Prisma",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "lint": "eslint src --ext .js",
     "test": "jest --forceExit --detectOpenHandles",
-    "test:coverage": "jest --forceExit --detectOpenHandles --coverage",
-    "db:migrate": "prisma migrate deploy",
+     "db:push": "prisma db push",
+"test:coverage": "jest --forceExit --detectOpenHandles --coverage",
     "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js"
   },
@@ -36,7 +40,13 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.js"],
-    "setupFilesAfterFramework": []
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "setupFilesAfterEnv": [],
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js"
+    ]
   }
 }

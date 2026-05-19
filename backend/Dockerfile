@@ -1,34 +1,41 @@
-# ── ParkiPay Backend — Node 20 Alpine ────────────────────────────────────────
-FROM node:20-alpine AS base
+# ── ParkiPay Backend — Production Image ──────────────────────────────────────
+# Node 20 Alpine for a minimal, secure image.
+# Multi-stage build: deps → builder → final runner.
+
+# ── Stage 1: Install production dependencies ──────────────────────────────────
+FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Install OS deps needed by Prisma
+# openssl required by Prisma's query engine
 RUN apk add --no-cache openssl
 
-# ── Dependencies ──────────────────────────────────────────────────────────────
-FROM base AS deps
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# ── Build / generate Prisma client ────────────────────────────────────────────
+# ── Stage 2: Generate Prisma client ───────────────────────────────────────────
 FROM deps AS builder
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# ── Final image ───────────────────────────────────────────────────────────────
-FROM base AS runner
+# ── Stage 3: Final runtime image ─────────────────────────────────────────────
+FROM node:20-alpine AS runner
+WORKDIR /app
 ENV NODE_ENV=production
 
-# Create non-root user
+# openssl needed at runtime by Prisma
+RUN apk add --no-cache openssl
+
+# Non-root user for security
 RUN addgroup -S parkipay && adduser -S parkipay -G parkipay
 
-COPY --from=builder /app/node_modules ./node_modules
+# Copy only what is needed to run
+COPY --from=builder /app/node_modules       ./node_modules
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY prisma   ./prisma
-COPY src      ./src
-COPY entrypoint.sh ./entrypoint.sh
+COPY prisma         ./prisma
+COPY src            ./src
+COPY entrypoint.sh  ./entrypoint.sh
 
-RUN chown -R parkipay:parkipay /app
+RUN chmod +x ./entrypoint.sh && chown -R parkipay:parkipay /app
 USER parkipay
 
 EXPOSE 8000

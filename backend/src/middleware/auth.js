@@ -1,13 +1,16 @@
 // ParkiPay — JWT auth middleware + role guards
-const { verify, isBlacklisted } = require('../lib/jwt');
-const prisma = require('../lib/prisma');
+const { verify }  = require('../lib/jwt');
+const prisma      = require('../lib/prisma');
 
 /**
- * authenticate — verifies the Bearer access token and attaches req.officer
+ * authenticate
+ * Verifies the Bearer access token in the Authorization header and attaches
+ * the full Officer row (with location) to req.officer.
+ * Responds with 401 on any failure — never calls next(err).
  */
 async function authenticate(req, res, next) {
   const header = req.headers['authorization'] || '';
-  const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token  = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
 
   if (!token) {
     return res.status(401).json({ error: 'unauthorized', detail: 'No token provided.' });
@@ -15,8 +18,9 @@ async function authenticate(req, res, next) {
 
   try {
     const payload = verify(token);
+
     const officer = await prisma.officer.findUnique({
-      where: { id: parseInt(payload.sub, 10) },
+      where:   { id: parseInt(payload.sub, 10) },
       include: { location: true },
     });
 
@@ -25,21 +29,26 @@ async function authenticate(req, res, next) {
     }
 
     req.officer = officer;
-    next();
-  } catch (err) {
+    return next();
+  } catch (_err) {
     return res.status(401).json({ error: 'unauthorized', detail: 'Invalid or expired token.' });
   }
 }
 
 /**
- * requireRole — factory that returns a middleware checking officer.role
+ * requireRole
+ * Factory that returns a middleware enforcing role membership.
+ * Must be chained AFTER authenticate.
+ *
+ * @param {...string} roles  Allowed role strings
+ * @returns {Function} Express middleware
  */
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!roles.includes(req.officer?.role)) {
+    if (!req.officer || !roles.includes(req.officer.role)) {
       return res.status(403).json({ error: 'forbidden', detail: 'Insufficient permissions.' });
     }
-    next();
+    return next();
   };
 }
 

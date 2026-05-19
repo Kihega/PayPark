@@ -1,15 +1,16 @@
 // ParkiPay — Prisma Schema
-// Faithfully ported from Django models
+// Database: PostgreSQL (Supabase or self-hosted)
+// Run `npm run db:generate` after any schema change.
+// Run `npm run db:migrate`  to apply migrations.
 
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // pooler — used at runtime
+  directUrl = env("DIRECT_URL")     // direct — used for migrations only
 }
-
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
 enum OfficerRole {
@@ -45,15 +46,15 @@ model Officer {
   passwordHash        String           @map("password_hash")
   locationId          Int?             @map("location_id")
   location            ParkingLocation? @relation(fields: [locationId], references: [id])
-  isActive            Boolean          @default(true) @map("is_active")
-  failedLoginAttempts Int              @default(0) @map("failed_login_attempts")
+  isActive            Boolean          @default(true)  @map("is_active")
+  failedLoginAttempts Int              @default(0)     @map("failed_login_attempts")
   lockedUntil         DateTime?        @map("locked_until")
   lastLogin           DateTime?        @map("last_login")
   createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
+  updatedAt           DateTime         @updatedAt      @map("updated_at")
 
-  auditLogs      AuditLog[]
-  bills          ControlNumber[]
+  auditLogs AuditLog[]
+  bills     ControlNumber[]
 
   @@map("officers")
 }
@@ -96,7 +97,7 @@ model ParkingLocation {
   feeGovernment Decimal  @default(0)    @db.Decimal(10, 2) @map("fee_government")
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  updatedAt     DateTime @updatedAt     @map("updated_at")
 
   officers       Officer[]
   controlNumbers ControlNumber[]
@@ -120,7 +121,7 @@ model Vehicle {
   registrationDate DateTime?       @map("registration_date")
   isValid          Boolean         @default(true) @map("is_valid")
   createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
+  updatedAt        DateTime        @updatedAt     @map("updated_at")
 
   controlNumbers ControlNumber[]
 
@@ -145,10 +146,11 @@ model ControlNumber {
   status        BillStatus       @default(ACTIVE)
   smsSent       Boolean          @default(false) @map("sms_sent")
   emailSent     Boolean          @default(false) @map("email_sent")
-  smsError      String           @default("") @map("sms_error")
+  smsError      String           @default("")    @map("sms_error")
   notes         String           @default("")
   createdAt     DateTime         @default(now()) @map("created_at")
 
+  // Indexes critical for duplicate-prevention query performance
   @@index([plateNumber, status, expiresAt])
   @@index([officerId, generatedAt])
   @@index([status, expiresAt])
@@ -159,8 +161,8 @@ model ControlNumber {
 
 model BlacklistedToken {
   id        Int      @id @default(autoincrement())
-  jti       String   @unique
-  expiresAt DateTime @map("expires_at")
+  jti       String   @unique               // UUID from the token's jti claim
+  expiresAt DateTime @map("expires_at")    // Mirrors token exp — allows cleanup
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("blacklisted_tokens")
