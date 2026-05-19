@@ -9,7 +9,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")   // pooler — used at runtime
-  directUrl = env("DIRECT_URL")     // direct — used for migrations only
+  //directUrl = env("DIRECT_URL")     // direct — used for migrations only
 }
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
