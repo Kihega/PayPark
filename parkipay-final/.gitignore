@@ -1,0 +1,60 @@
+# ── Environment variables (NEVER commit these) ────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Prisma ────────────────────────────────────────────────────────────────────
+# Don't commit generated client — it's built in CI and Docker
+backend/node_modules/.prisma/
+
+# ── Jest / Coverage ───────────────────────────────────────────────────────────
+coverage/
+*.lcov
+.nyc_output/
+
+# ── Expo / React Native ────────────────────────────────────────────────────────
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# ── EAS ───────────────────────────────────────────────────────────────────────
+.easignore
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# (docker-compose.yml and Dockerfile ARE committed)
+postgres_data/
+
+# ── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.iml
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+pids/
+*.pid
+*.seed
+
+# ── Build output ──────────────────────────────────────────────────────────────
+dist/
+build/
+out/

@@ -1,0 +1,135 @@
+================================================================================
+          PARKIPAY — ARCHITECTURE & FILE STRUCTURE
+================================================================================
+
+SYSTEM ARCHITECTURE
+===================
+
+  [Android Device - Field Officer]
+       |
+       | Expo Go / APK (React Native)
+       | HTTPS REST API calls
+       |
+  [Render.com - Web Service]
+       Docker — Node 20 Alpine
+       Express 4 API
+       ├── /api/health/
+       ├── /api/auth/       (login/refresh/logout/me)
+       ├── /api/vehicles/   (lookup/locations)
+       └── /api/billing/    (generate/history/status)
+       |
+       | Prisma ORM — TLS pooled connection
+       |
+  [Supabase — PostgreSQL 16]
+       ├── officers
+       ├── parking_locations
+       ├── vehicles
+       ├── control_numbers   ← DUPLICATE PREVENTION INDEX
+       ├── blacklisted_tokens ← JWT ROTATION BLACKLIST
+       └── audit_logs        ← FULL AUDIT TRAIL
+       |
+  [Africa's Talking]
+       └── SMS notifications to car owners
+
+CI/CD FLOW
+==========
+
+  Termux (code) → git push develop → GitHub Actions CI
+                                           |
+                              lint + audit + jest (all green?)
+                                           |
+                                    auto-merge to main
+                                           |
+                              GitHub Actions CD (on main push)
+                                    |              |
+                              backend-cd.yml   mobile-cd.yml
+                              curl Render      eas build android
+                              deploy hook      production
+                                    |              |
+                              Render rebuilds  APK/AAB built
+                              Docker image     on Expo cloud
+                              ~90 seconds      ~10 minutes
+                              API live!        Download from expo.dev
+
+DUPLICATE PREVENTION FLOW
+=========================
+
+  Officer scans plate
+       |
+       POST /api/billing/generate/
+       |
+       getActiveBillForPlate(plate)
+       SELECT FROM control_numbers WHERE plate=? AND status='ACTIVE' AND expires_at > NOW()
+       |
+       Found? ─────── YES ──► HTTP 409 + show existing bill to officer
+       |
+       NO
+       |
+       Create new bill (generateControlNumber)
+       Audit log BILL_GENERATED
+       HTTP 201 + show control number
+
+FILE STRUCTURE
+==============
+
+parkipay/
+├── README.md
+├── DEVELOPER_GUIDE.txt
+├── .gitignore
+├── System_Summary_and_Architecture/
+│   ├── system_summary.txt
+│   └── architecture_diagram.txt
+├── Agile_Project_Planning/
+│   ├── sprint_0_project_setup.txt
+│   ├── sprint_1_auth.txt
+│   └── sprints_2_to_5_and_dod.txt
+├── backend/
+│   ├── src/
+│   │   ├── app.js                  Express app factory
+│   │   ├── server.js               HTTP entry point
+│   │   ├── config/index.js         Env config
+│   │   ├── lib/
+│   │   │   ├── prisma.js           Singleton client
+│   │   │   ├── jwt.js              sign/verify/blacklist
+│   │   │   ├── audit.js            Audit log helper
+│   │   │   └── controlNumber.js    CN gen + duplicate check
+│   │   ├── middleware/
+│   │   │   ├── auth.js             Bearer + role guards
+│   │   │   └── errorHandler.js     Global error handler
+│   │   └── routes/
+│   │       ├── health.js
+│   │       ├── auth.js
+│   │       ├── vehicles.js
+│   │       └── billing.js
+│   ├── prisma/
+│   │   ├── schema.prisma           DB schema
+│   │   └── seed.js                 Test users
+│   ├── __tests__/
+│   │   └── auth.test.js            Jest integration tests
+│   ├── .env.example
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── entrypoint.sh
+│   └── package.json
+├── mobile/
+│   ├── app/
+│   │   ├── _layout.tsx             Root layout + auth redirect
+│   │   ├── index.tsx               Animated splash
+│   │   ├── (auth)/login.tsx        Login screen
+│   │   └── (app)/home.tsx          Home screen (Sprint 1)
+│   ├── components/ui/              Button, Card, Input, StatusBadge
+│   ├── constants/                  theme.ts, api.ts
+│   ├── hooks/                      useAuth, useHealthCheck
+│   ├── services/api.ts             Axios + JWT refresh
+│   ├── store/authStore.ts          Zustand + SecureStore
+│   ├── .env.example
+│   ├── app.json, eas.json
+│   ├── tsconfig.json
+│   └── package.json
+└── .github/workflows/
+    ├── backend-ci.yml
+    ├── backend-cd.yml
+    ├── mobile-ci.yml
+    └── mobile-cd.yml
+
+© 2026 Government of Tanzania — ParkiPay Architecture

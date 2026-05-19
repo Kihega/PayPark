@@ -1,0 +1,112 @@
+================================================================================
+   PARKIPAY — SPRINTS 2–5 PLANNING & DEFINITION OF DONE
+================================================================================
+
+SPRINT 2 — Vehicle Plate Verification (Week 3) — 🔜 NEXT
+─────────────────────────────────────────────────────────
+Goal: Officer can enter a plate, see vehicle details, select a location.
+
+Success Criteria:
+  [ ] Plate entry screen with normalisation (uppercase, strip spaces)
+  [ ] GET /api/vehicles/lookup/?plate= shows owner, make, category
+  [ ] GET /api/vehicles/locations/ populates location picker
+  [ ] "Not in registry" state handled — officer can still proceed
+  [ ] All lookup events in audit_logs
+
+Stories:
+  US-201: Type plate → see vehicle details (owner, make, colour, category)
+  US-202: Not found → banner shown, bill still possible (plate-only billing)
+  US-203: Location picker pre-selects officer's assigned location
+  US-204: Locations cached per shift (no refetch on every scan)
+
+Note: Backend routes are already implemented. This sprint is mobile UI only.
+
+
+SPRINT 3 — Control Number Generation & Duplicate Prevention (Week 4) — 📋
+──────────────────────────────────────────────────────────────────────────
+Goal: One-tap bill generation with guaranteed no duplicates.
+
+Success Criteria:
+  [ ] POST /api/billing/generate/ → CN or 409 Conflict
+  [ ] 409 shows existing bill info (CN, expiry, officer)
+  [ ] CN shown in large format: PKP-YYYYMMDD-XXXXXX
+  [ ] GET /api/billing/history/ shows today's bills
+  [ ] GET /api/billing/:cn/status/ shows status + time remaining
+  [ ] BILL_GENERATED + BILL_DUPLICATE_BLOCKED in audit_logs
+
+Stories:
+  US-301: Generate CN → shown large with amount due + expiry
+  US-302: Duplicate → blocked silently, existing bill displayed
+  US-303: History → newest first, plate/CN/location/amount/status
+  US-304: Status lookup by CN
+
+
+SPRINT 4 — SMS Notifications (Week 5) — 📋
+──────────────────────────────────────────
+Goal: Owner SMS within 5 seconds of bill generation.
+
+Success Criteria:
+  [ ] Africa's Talking SMS sent after successful bill creation
+  [ ] SMS body in Swahili: CN, amount (TZS), location, expiry time
+  [ ] sms_sent flag updated on control_numbers row
+  [ ] sms_error stored if delivery fails (bill NOT rolled back)
+  [ ] AT sandbox used for development (AT_USERNAME=sandbox)
+
+Stories:
+  US-401: SMS sent to owner_phone after bill generation
+  US-402: SMS failure → stored in sms_error, warning shown, not blocking
+
+
+SPRINT 5 — Admin Reporting (Week 6) — 📋
+─────────────────────────────────────────
+Goal: Supervisors see daily summary and per-officer stats.
+
+Success Criteria:
+  [ ] GET /api/reports/daily-summary/ → totals + revenue + duplicates blocked
+  [ ] GET /api/reports/officer-stats/ → per-officer breakdown by date
+  [ ] Mobile supervisor home shows summary cards
+  [ ] Expired bill cleanup cron (every 15 min)
+
+Stories:
+  US-501: Daily summary — total CNs, total TZS, duplicates blocked
+  US-502: Officer stats — bills, amount, duplicates per officer
+  US-503: Cron job marks expired bills ACTIVE→EXPIRED
+
+
+DEFINITION OF DONE
+══════════════════
+A story is DONE when ALL of these pass:
+
+  Code Quality
+  [ ] ESLint: 0 errors, 0 warnings
+  [ ] TypeScript strict (mobile): 0 errors
+  [ ] No console.log() in committed code
+  [ ] Single responsibility per function
+
+  Testing
+  [ ] Jest tests written for new API endpoints
+  [ ] npm test: 0 failures
+  [ ] Edge cases covered (empty input, network error, server error)
+
+  Security
+  [ ] No secrets in source (all in .env)
+  [ ] New endpoints use authenticate middleware
+  [ ] Input validated with Zod
+  [ ] Significant actions in audit_logs
+
+  Documentation
+  [ ] Sprint file updated
+  [ ] New env vars added to .env.example
+  [ ] API table in README updated
+
+  CI/CD
+  [ ] Push to develop → CI all green
+  [ ] CI auto-merges to main
+  [ ] CD deploys to Render → /api/health/ returns 200
+
+  Acceptance
+  [ ] Works on Android physical device via Expo Go
+  [ ] API tested with curl against Render URL
+  [ ] Product owner signed off
+
+© 2026 Government of Tanzania — ParkiPay Agile Planning
