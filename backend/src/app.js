@@ -6,6 +6,7 @@ const helmet       = require('helmet');
 const cors         = require('cors');
 const morgan       = require('morgan');
 const rateLimit    = require('express-rate-limit');
+const cfg          = require('./config');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -13,12 +14,45 @@ const app = express();
 // ── Security & Parsing ────────────────────────────────────────────────────────
 app.set('trust proxy', 1); // Trust first proxy (required on Render / Railway)
 app.use(helmet());
-app.use(cors());
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// cfg.corsOrigins is built from CORS_ALLOWED_ORIGINS in .env plus LAN regexes
+// in dev, so physical Android/iOS devices on the same network are accepted.
+//
+// React Native apps do NOT send an Origin header (they are not browsers), so
+// CORS is not strictly enforced client-side — but configuring it correctly
+// protects the API when accessed from web clients and future web dashboards.
+app.use(
+  cors({
+    // Accept: configured origins + LAN IP ranges in development
+    origin: (origin, callback) => {
+      // Allow requests with no origin (React Native, Postman, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const allowed = cfg.corsOrigins.some((pattern) => {
+        if (typeof pattern === 'string') return pattern === origin;
+        if (pattern instanceof RegExp) return pattern.test(origin);
+        return false;
+      });
+
+      if (allowed) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
+);
+
 app.use(express.json());
 
 // Log HTTP requests — 'combined' format in prod (parseable by log aggregators),
 // 'dev' format locally for human-readable coloured output.
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(morgan(cfg.isProduction ? 'combined' : 'dev'));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 app.use(

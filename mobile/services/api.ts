@@ -1,10 +1,12 @@
 /**
  * ParkiPay — API Service
  * Axios instance with:
- * - Base URL from constants
+ * - Base URL from constants (platform-aware)
+ * - Extended timeout for Render free-tier cold starts (up to 50 s)
  * - Bearer token injection
  * - Silent 401 → refresh → retry logic
  * - Logout on unrecoverable 401
+ * - Human-readable network error codes
  */
 import axios, {
   AxiosResponse,
@@ -18,7 +20,9 @@ import { useAuthStore } from '@/store/authStore';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  // 50 s covers Render free-tier cold starts (typically 30–50 s after idle).
+  // For local dev this is still fast because the server is already running.
+  timeout: 50000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -31,6 +35,9 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (__DEV__) {
+    console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
   }
   return config;
 });
@@ -51,11 +58,30 @@ const processQueue = (error: unknown, token: string | null) => {
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
 
+    // ── Network / timeout errors: enrich with a useful code ──────────────────
+    if (!error.response) {
+      const isTimeout = error.code === 'ECONNABORTED';
+      const enriched = {
+        ...error,
+        response: {
+          data: {
+            error: isTimeout ? 'timeout' : 'network_error',
+            detail: isTimeout
+              ? 'The server took too long to respond. If it was idle it may be waking up — please try again in a moment.'
+              : `Cannot reach the server at ${API_BASE_URL}. Check your network or update EXPO_PUBLIC_API_URL in mobile/.env.`,
+          },
+        },
+      };
+      return Promise.reject(enriched);
+    }
+
+    // ── 401: try a silent token refresh ──────────────────────────────────────
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
-        // Queue request until refresh completes
         return new Promise((resolve, reject) => {
           failedQueue.push({
             resolve: (token: string) => {
@@ -77,9 +103,10 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(`${API_BASE_URL}${API_ROUTES.refresh}`, {
-          refresh: refreshToken,
-        });
+        const { data } = await axios.post(
+          `${API_BASE_URL}${API_ROUTES.refresh}`,
+          { refresh: refreshToken },
+        );
 
         const newAccessToken: string = data.access;
         useAuthStore.getState().setAccessToken(newAccessToken);
