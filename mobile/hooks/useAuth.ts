@@ -4,7 +4,7 @@
  * automatic store hydration.  Used by the login screen and any
  * component that needs to initiate a logout.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { authService } from '@/services/api';
 import { useAuthStore, OfficerProfile } from '@/store/authStore';
 
@@ -29,6 +29,12 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
 
+  // Synchronous ref guard — prevents a second call from starting before
+  // React has flushed the isLoading state update.  This is the root cause
+  // of the "50 requests" bug: TouchableOpacity queues multiple rapid taps
+  // and they all fire before the first setState(true) propagates.
+  const inFlightRef = useRef(false);
+
   /**
    * Attempt login. Returns { success, error }.
    * Never throws — all error states are returned in the result object
@@ -36,6 +42,10 @@ export function useAuth() {
    */
   const login = useCallback(
     async (employeeId: string, password: string): Promise<LoginResult> => {
+      // Hard guard: if a request is already in flight, silently drop the call
+      if (inFlightRef.current) return { success: false };
+
+      inFlightRef.current = true;
       setIsLoading(true);
       setError(null);
 
@@ -58,7 +68,9 @@ export function useAuth() {
 
         const authError: AuthError = {
           code: d?.error ?? 'network_error',
-          message: d?.detail ?? 'Connection failed. Check your network and try again.',
+          message:
+            d?.detail ??
+            'Hakuna muunganisho. Angalia mtandao wako au URL ya seva.\n(Cannot reach server. Check your network or server URL.)',
           remainingAttempts: d?.remaining_attempts,
           lockedUntil: d?.locked_until,
         };
@@ -66,6 +78,7 @@ export function useAuth() {
         setError(authError);
         return { success: false, error: authError };
       } finally {
+        inFlightRef.current = false;
         setIsLoading(false);
       }
     },
@@ -77,6 +90,8 @@ export function useAuth() {
    * Tolerates network errors (still clears local state regardless).
    */
   const logout = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setIsLoading(true);
     try {
       if (refreshToken) {
@@ -85,6 +100,7 @@ export function useAuth() {
     } catch {
       // Server-side blacklist failed — clear local state anyway
     } finally {
+      inFlightRef.current = false;
       await clearAuth();
       setIsLoading(false);
     }
