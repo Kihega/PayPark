@@ -1,33 +1,49 @@
 // ParkiPay — HTTP server entry point
-// Validates the DB connection before accepting traffic, then starts listening.
-const app    = require('./app');
-const cfg    = require('./config');
+// Validates DB connection before accepting traffic, then starts listening.
+
+const app = require('./app');
+const cfg = require('./config');
 const prisma = require('./lib/prisma');
 
 async function start() {
-  // Verify database is reachable before opening the HTTP port
-  await prisma.$connect();
-  console.log('✅ Database connected.');
+  try {
+    console.log('🔄 Connecting to database...');
 
-  const server = app.listen(cfg.port, () => {
-    console.log(`🚀 ParkiPay API running on port ${cfg.port} [${cfg.nodeEnv}]`);
-  });
+    // Verify database is reachable before opening HTTP port
+    await prisma.$connect();
 
-  // Graceful shutdown — finish in-flight requests before closing
-  const shutdown = async (signal) => {
-    console.log(`\n${signal} received — shutting down gracefully...`);
-    server.close(async () => {
-      await prisma.$disconnect();
-      console.log('Database disconnected. Bye.');
-      process.exit(0);
+    console.log('✅ Database connected.');
+
+    // IMPORTANT: bind to 0.0.0.0 for Render
+    const server = app.listen(cfg.port, '0.0.0.0', () => {
+      console.log(
+        `🚀 ParkiPay API running on port ${cfg.port} [${cfg.nodeEnv}]`
+      );
     });
-  };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+    // Graceful shutdown
+    const shutdown = async (signal) => {
+      console.log(`\n${signal} received — shutting down gracefully...`);
+
+      server.close(async () => {
+        try {
+          await prisma.$disconnect();
+          console.log('✅ Database disconnected.');
+          process.exit(0);
+        } catch (err) {
+          console.error('❌ Error disconnecting database:', err);
+          process.exit(1);
+        }
+      });
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
+  } catch (err) {
+    console.error('❌ Failed to start server:', err);
+    process.exit(1);
+  }
 }
 
-start().catch((err) => {
-  console.error('❌ Failed to start server:', err);
-  process.exit(1);
-});
+start();

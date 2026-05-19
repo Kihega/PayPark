@@ -1,0 +1,74 @@
+================================================================================
+          PROJECT PROPOSAL & SYSTEM SUMMARY — PARKIPAY
+    Mobile Application for Fair Parking Fee Collection in Tanzania
+================================================================================
+Document Version : 2.0  (corrected — reflects actual Node.js implementation)
+Date             : May 2026
+================================================================================
+
+1. EXECUTIVE SUMMARY
+ParkiPay digitises parking fee collection across Tanzania government parking
+areas. Core feature: a global duplicate-bill prevention engine — only ONE
+active control number can exist per plate number system-wide at any time.
+
+2. PROBLEM STATEMENT
+  a) Duplicate Billing — Multiple officers bill the same vehicle independently.
+  b) No Owner Awareness — Car owners get no digital receipt.
+  c) No Audit Trail — No record of who issued bills or when.
+
+3. ACTUAL TECH STACK (not Django — this is Node.js)
+  Mobile:    React Native 0.81 + Expo SDK 54 + Expo Router 6
+  State:     Zustand 5 + expo-secure-store
+  API:       Axios + silent JWT refresh interceptor
+  Backend:   Node.js 20 + Express 4.19
+  ORM:       Prisma 5 (type-safe PostgreSQL)
+  Auth:      jsonwebtoken — access (60 min) + refresh (7 days, rotated)
+  Security:  Helmet · CORS · express-rate-limit · bcryptjs (cost 12)
+  Testing:   Jest 29 + Supertest 7
+  Database:  PostgreSQL 16 (Supabase)
+  SMS:       Africa's Talking
+  Deploy:    Render.com (Docker) + EAS Build (mobile)
+  CI/CD:     GitHub Actions
+
+4. API ENDPOINTS
+  GET  /api/health/                 — Health + DB ping (no auth)
+  POST /api/auth/login/             — Officer login
+  POST /api/auth/refresh/           — JWT rotation
+  POST /api/auth/logout/            — Blacklist refresh token
+  GET  /api/auth/me/                — Officer profile
+  GET  /api/vehicles/lookup/?plate= — Registry lookup
+  GET  /api/vehicles/locations/     — Active parking locations
+  POST /api/billing/generate/       — Generate control number (CORE)
+  GET  /api/billing/history/        — Today's bills
+  GET  /api/billing/:cn/status/     — Bill status
+
+5. DUPLICATE PREVENTION QUERY (the core engine)
+  SELECT * FROM control_numbers
+  WHERE plate_number ILIKE $plate
+    AND status = 'ACTIVE'
+    AND expires_at > NOW()
+  LIMIT 1;
+  → If found: HTTP 409 + existing bill details + audit log
+  → If null: proceed with bill creation
+
+6. DATABASE TABLES
+  officers, parking_locations, vehicles, control_numbers,
+  blacklisted_tokens, audit_logs
+
+7. SPRINT ROADMAP
+  Sprint 0 — Setup, DB schema, health check, CI/CD        ✅ Done
+  Sprint 1 — Officer auth (login/logout/JWT)               ✅ Done
+  Sprint 2 — Vehicle plate verification                    🔜 Next
+  Sprint 3 — Control number + duplicate prevention         📋 Planned
+  Sprint 4 — SMS notifications (Africa's Talking)          📋 Planned
+  Sprint 5 — Admin reporting                               📋 Planned
+  Sprint 6 — Security audit + production hardening         📋 Planned
+
+8. HOSTING
+  Render.com (API, Docker) — $7/month
+  Supabase (PostgreSQL)    — $0/month (free tier)
+  EAS Build (mobile APK)   — $0/month (30 builds free)
+  Africa's Talking (SMS)   — ~$0.02/SMS
+  Total                    — ≈ $7/month
+
+© 2026 Government of Tanzania — ParkiPay

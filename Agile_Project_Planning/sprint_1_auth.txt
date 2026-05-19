@@ -1,0 +1,64 @@
+================================================================================
+   PARKIPAY — SPRINT 1: Officer Authentication (Login/Logout/JWT)
+================================================================================
+Duration : Week 2 (5 working days)
+Status   : ✅ COMPLETE
+================================================================================
+
+SPRINT GOAL
+"A field officer can launch ParkiPay on their Android phone, log in with their
+employee ID and password, see their profile, and log out securely. Tokens persist
+across app restarts."
+
+SUCCESS CRITERIA
+  ✅ POST /api/auth/login/ returns access + refresh + officer profile
+  ✅ POST /api/auth/refresh/ rotates the refresh token pair
+  ✅ POST /api/auth/logout/ blacklists refresh token in DB
+  ✅ GET /api/auth/me/ returns profile for valid token
+  ✅ 5 failed logins lock account for 15 minutes
+  ✅ Login screen — TATURA design, bilingual Swahili/English
+  ✅ Tokens stored in expo-secure-store (hardware-backed)
+  ✅ Silent 401 → refresh → retry via Axios interceptor
+  ✅ Session persists across app restarts (SecureStore)
+  ✅ Logout clears SecureStore + blacklists token
+  ✅ All auth events written to audit_logs
+
+DELIVERABLES
+  mobile/app/_layout.tsx              Root layout + auth state redirect
+  mobile/app/index.tsx                Animated splash (Tanzania flag colours)
+  mobile/app/(auth)/_layout.tsx       Auth stack
+  mobile/app/(auth)/login.tsx         Login screen bilingual
+  mobile/app/(app)/_layout.tsx        Authenticated stack + auth guard
+  mobile/app/(app)/home.tsx           Home with profile + logout
+  mobile/store/authStore.ts           Zustand + SecureStore persistence
+  mobile/services/api.ts              Axios + silent refresh interceptor
+  mobile/hooks/useAuth.ts             Login/logout hook
+  mobile/hooks/useHealthCheck.ts      Backend connectivity check
+  mobile/constants/api.ts             API URL + route constants
+  mobile/constants/theme.ts           TATURA design tokens
+  mobile/components/ui/Button.tsx     Gradient button component
+  mobile/components/ui/Input.tsx      Form input component
+  mobile/components/ui/Card.tsx       Card with accent strip
+  mobile/components/ui/StatusBadge.tsx
+
+USER STORIES
+  US-101: Officer Login
+    AC: Valid credentials → tokens + profile. Wrong password → error + remaining
+        attempts. Missing fields → validation error.
+  US-102: Persistent Session
+    AC: SecureStore saves tokens. On relaunch → home screen directly.
+        Splash shown while tokens load.
+  US-103: Silent Token Refresh
+    AC: 401 → Axios intercepts → calls /auth/refresh/ → retries → transparent.
+  US-104: Account Lockout
+    AC: 5 failed attempts → locked 15 min. Screen shows bilingual lockout message.
+  US-105: Secure Logout
+    AC: Confirmation dialog. POST /auth/logout/ blacklists token. SecureStore cleared.
+  US-106: Login UI Design
+    AC: TATURA green/yellow/black. Swahili + English. Keyboard avoidance. Eye toggle.
+
+TECHNICAL NOTES
+  - Refresh rotation: old jti blacklisted, new pair issued on every refresh.
+  - authStore uses Zustand (not Context) for performance.
+  - officer.full_name from API response (snake_case from officerProfile() helper).
+  - home.tsx Sprint 1 placeholder — fully replaced in Sprint 2.
