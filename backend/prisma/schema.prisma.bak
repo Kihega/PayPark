@@ -53,7 +53,6 @@ model Officer {
   createdAt           DateTime         @default(now()) @map("created_at")
   updatedAt           DateTime         @updatedAt      @map("updated_at")
 
-  biometric   OfficerBiometric?
   auditLogs AuditLog[]
   bills     ControlNumber[]
 
@@ -167,23 +166,4 @@ model BlacklistedToken {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("blacklisted_tokens")
-}
-
-
-// ── OfficerBiometric ──────────────────────────────────────────────────────────
-// One row per officer. Stores the device-generated random token that is
-// exchanged for a JWT after local biometric verification passes on-device.
-// Real biometric templates never leave the device.
-
-model OfficerBiometric {
-  id          Int      @id @default(autoincrement())
-  officerId   Int      @unique  @map("officer_id")
-  officer     Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
-  token       String   @unique  // 64-char hex random
-  deviceHint  String   @default("device") @map("device_hint")
-  isActive    Boolean  @default(true)     @map("is_active")
-  createdAt   DateTime @default(now())    @map("created_at")
-  updatedAt   DateTime @updatedAt         @map("updated_at")
-
-  @@map("officer_biometrics")
 }

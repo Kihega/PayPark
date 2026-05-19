@@ -8,16 +8,21 @@ import * as SecureStore from 'expo-secure-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Matches the shape returned by the backend's officerProfile() helper:
+ *   { id, employeeId, fullName, phone, email, role, locationName, isActive, lastLogin }
+ * NOTE: all fields are camelCase — the backend is Node/Express (camelCase convention).
+ */
 export interface OfficerProfile {
   id: number;
-  employee_id: string;
-  full_name: string;
+  employeeId: string;
+  fullName: string;
   phone: string;
   email: string;
   role: 'FIELD_OFFICER' | 'SUPERVISOR' | 'ADMIN';
-  location_name: string | null;
-  is_active: boolean;
-  last_login: string | null;
+  locationName: string | null;
+  isActive: boolean;
+  lastLogin: string | null;
 }
 
 interface AuthState {
@@ -36,8 +41,8 @@ interface AuthState {
 
 // ── SecureStore keys ──────────────────────────────────────────────────────────
 const KEYS = {
-  ACCESS_TOKEN: 'parkipay_access_token',
-  REFRESH_TOKEN: 'parkipay_refresh_token',
+  ACCESS_TOKEN:    'parkipay_access_token',
+  REFRESH_TOKEN:   'parkipay_refresh_token',
   OFFICER_PROFILE: 'parkipay_officer_profile',
 } as const;
 
@@ -92,6 +97,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       if (accessToken && refreshToken && profileJson) {
         const officer: OfficerProfile = JSON.parse(profileJson);
+        // Guard against stale profiles stored with old snake_case keys
+        if (!officer.fullName && (officer as unknown as Record<string, unknown>).full_name) {
+          // Wipe the stale profile so the user re-authenticates cleanly
+          await SecureStore.deleteItemAsync(KEYS.ACCESS_TOKEN);
+          await SecureStore.deleteItemAsync(KEYS.REFRESH_TOKEN);
+          await SecureStore.deleteItemAsync(KEYS.OFFICER_PROFILE);
+          return;
+        }
         set({ accessToken, refreshToken, officer, isAuthenticated: true });
       }
     } catch {

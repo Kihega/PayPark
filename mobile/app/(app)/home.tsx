@@ -11,13 +11,13 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -38,14 +38,14 @@ import {
 
 const ROLE_LABELS: Record<string, string> = {
   FIELD_OFFICER: 'Field Officer',
-  SUPERVISOR: 'Supervisor',
-  ADMIN: 'Administrator',
+  SUPERVISOR:    'Supervisor',
+  ADMIN:         'Administrator',
 };
 
 const ROLE_COLORS: Record<string, string> = {
   FIELD_OFFICER: SprintColors.green,
-  SUPERVISOR: '#1565C0',
-  ADMIN: '#6A1B9A',
+  SUPERVISOR:    '#1565C0',
+  ADMIN:         '#6A1B9A',
 };
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -56,9 +56,9 @@ export default function HomeScreen() {
 
   const today = new Date().toLocaleDateString('en-TZ', {
     weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+    year:    'numeric',
+    month:   'long',
+    day:     'numeric',
   });
 
   const handleLogout = () => {
@@ -88,10 +88,13 @@ export default function HomeScreen() {
     );
   };
 
+  // Guard: officer must be loaded before rendering
   if (!officer) return null;
 
-  const roleColor = ROLE_COLORS[officer.role] ?? SprintColors.green;
-  const roleLabel = ROLE_LABELS[officer.role] ?? officer.role;
+  // Use camelCase fields from backend (employeeId, fullName, locationName, isActive)
+  const firstName   = officer.fullName?.split(' ')?.[0] ?? 'Afisa';
+  const roleColor   = ROLE_COLORS[officer.role] ?? SprintColors.green;
+  const roleLabel   = ROLE_LABELS[officer.role] ?? officer.role;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -131,10 +134,20 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.welcomeText}>
-            Karibu,
-            {'\n\n'}
-            {officer.full_name.split(' ')[0]}
+            Karibu,{'\n\n'}{firstName}
           </Text>
+
+          {/* Officer details */}
+          <View style={styles.detailsBlock}>
+            <Text style={styles.detailRow}>
+              🪪  {officer.employeeId}
+            </Text>
+            {officer.locationName ? (
+              <Text style={styles.detailRow}>
+                📍  {officer.locationName}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -157,34 +170,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   appBar: {
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
+    paddingTop:        Spacing.xl,
+    paddingBottom:     Spacing.lg,
     paddingHorizontal: Spacing.lg,
   },
   appBarContent: {
-    flexDirection: 'row',
+    flexDirection:  'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems:     'center',
   },
   appBarTitle: {
-    fontSize: FontSize["3xl"],
-    fontWeight: FontWeight.bold,
-    color: Colors.white,
+    fontSize:      FontSize['3xl'],
+    fontWeight:    FontWeight.bold,
+    color:         Colors.white,
     letterSpacing: LetterSpacing.tight,
   },
   appBarDate: {
-    fontSize: FontSize.sm,
-    color: Colors.white,
-    marginTop: 4,
+    fontSize:   FontSize.sm,
+    color:      Colors.white,
+    marginTop:  4,
   },
   logoutButton: {
-    backgroundColor: Colors.white,
+    backgroundColor:  Colors.white,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
+    paddingVertical:   Spacing.sm,
+    borderRadius:      Radius.full,
   },
   logoutButtonText: {
-    color: SprintColors.green,
+    color:      SprintColors.green,
     fontWeight: FontWeight.semiBold,
   },
   body: {
@@ -192,48 +205,56 @@ const styles = StyleSheet.create({
   },
   welcomeCard: {
     backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
+    borderRadius:    Radius.xl,
+    padding:         Spacing.xl,
+    marginBottom:    Spacing.lg,
     ...Shadows.md,
   },
   roleChip: {
-    alignSelf: 'flex-start',
+    alignSelf:         'flex-start',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.full,
-    marginBottom: Spacing.md,
+    paddingVertical:   Spacing.xs,
+    borderRadius:      Radius.full,
+    marginBottom:      Spacing.md,
   },
   roleChipText: {
-    color: Colors.white,
+    color:      Colors.white,
     fontWeight: FontWeight.semiBold,
-    fontSize: FontSize.sm,
+    fontSize:   FontSize.sm,
   },
   welcomeText: {
-    fontSize: FontSize["2xl"],
+    fontSize:   FontSize['2xl'],
     fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
+    color:      Colors.textPrimary,
     lineHeight: 34,
+  },
+  detailsBlock: {
+    marginTop: Spacing.md,
+    gap:       Spacing.xs,
+  },
+  detailRow: {
+    fontSize: FontSize.sm,
+    color:    Colors.textSecondary,
   },
   section: {
     marginTop: Spacing.md,
   },
   sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
+    fontSize:     FontSize.lg,
+    fontWeight:   FontWeight.bold,
     marginBottom: Spacing.md,
-    color: Colors.textPrimary,
+    color:        Colors.textPrimary,
   },
   zoneCard: {
     backgroundColor: Colors.white,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    marginBottom: Spacing.sm,
+    padding:         Spacing.lg,
+    borderRadius:    Radius.lg,
+    marginBottom:    Spacing.sm,
     ...Shadows.sm,
   },
   zoneText: {
-    fontSize: FontSize.md,
+    fontSize:   FontSize.md,
     fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
+    color:      Colors.textPrimary,
   },
 });
