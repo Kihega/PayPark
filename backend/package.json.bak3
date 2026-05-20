@@ -1,7 +1,7 @@
 {
   "name": "parkipay-api",
   "version": "1.0.0",
-  "description": "ParkiPay REST API \u2014 Node.js + Express + Prisma",
+  "description": "ParkiPay REST API — Node.js + Express + Prisma",
   "main": "src/server.js",
   "engines": {
     "node": ">=20.0.0"
@@ -11,14 +11,12 @@
     "dev": "nodemon src/server.js",
     "lint": "eslint src --ext .js",
     "test": "jest --forceExit --detectOpenHandles",
-    "db:push": "prisma db push",
-    "test:coverage": "jest --forceExit --detectOpenHandles --coverage",
+     "db:push": "prisma db push",
+"test:coverage": "jest --forceExit --detectOpenHandles --coverage",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "node prisma/seed.js",
-    "postinstall": "prisma generate",
-    "build": "prisma generate"
+    "db:seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
