@@ -1,22 +1,21 @@
-/** ParkiPay — App Stack Layout */
+/**ParkiPay — App Stack Layout (authenticated) */
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
-import { useSettingsStore } from '@/store/settingsStore';
 
 export default function AppLayout() {
   const { isAuthenticated } = useAuthStore();
-  const { loadSettings }    = useSettingsStore();
 
-  useEffect(() => { loadSettings(); }, []);
+  // Guard: redirect to login if token disappears mid-session
   useEffect(() => {
-    if (!isAuthenticated) router.replace('/(auth)/login');
+    if (!isAuthenticated) {
+      router.replace('/(auth)/login');
+    }
   }, [isAuthenticated]);
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <Stack.Screen name="home"  />
-      <Stack.Screen name="admin" />
+      <Stack.Screen name="home" />
     </Stack>
   );
 }
