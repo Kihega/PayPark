@@ -1,5 +1,5 @@
 /**
- * ParkiPay — useAuth Hook  (v3: ID-only login, real error messages)
+ * ParkiPay — useAuth Hook  (v2: ID-only login)
  */
 import { useState, useCallback } from 'react';
 import { authService } from '@/services/api';
@@ -8,6 +8,8 @@ import { useAuthStore, OfficerProfile } from '@/store/authStore';
 export interface AuthError {
   code: string;
   message: string;
+  remainingAttempts?: number;
+  lockedUntil?: string;
 }
 
 interface LoginResult {
@@ -19,7 +21,7 @@ interface LoginResult {
 export function useAuth() {
   const { setAuth, clearAuth, refreshToken, officer, isAuthenticated } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError]         = useState<AuthError | null>(null);
+  const [error, setError] = useState<AuthError | null>(null);
 
   const loginById = useCallback(async (employeeId: string): Promise<LoginResult> => {
     setIsLoading(true);
@@ -29,13 +31,10 @@ export function useAuth() {
       await setAuth(data.access, data.refresh, data.officer as OfficerProfile);
       return { success: true, role: data.officer.role };
     } catch (err: unknown) {
-      const resp = (err as any)?.response;
-      const d    = resp?.data;
-
-      // Surface the real backend message so we know exactly what went wrong
+      const d = (err as any)?.response?.data;
       const authError: AuthError = {
-        code:    d?.error   ?? 'network_error',
-        message: d?.detail  ?? (resp ? `Server error ${resp.status}` : 'No response from server. Check your connection.'),
+        code: d?.error ?? 'network_error',
+        message: d?.detail ?? 'Connection failed. Check your network.',
       };
       setError(authError);
       return { success: false, error: authError };
@@ -48,15 +47,12 @@ export function useAuth() {
     setIsLoading(true);
     try {
       if (refreshToken) await authService.logout(refreshToken);
-    } catch { /* clear local regardless */ } finally {
+    } catch { /* clear local state regardless */ } finally {
       await clearAuth();
       setIsLoading(false);
     }
   }, [refreshToken, clearAuth]);
 
-  return {
-    officer, isAuthenticated, isLoading, error,
-    clearError: () => setError(null),
-    loginById, logout,
-  };
+  return { officer, isAuthenticated, isLoading, error,
+    clearError: () => setError(null), loginById, logout };
 }
