@@ -112,6 +112,7 @@ export function useBiometric() {
       }
 
       /* 3. Exchange token for JWTs */
+      await setAuth(data.access, data.refresh, data.officer as OfficerProfile);
       return { success: true };
 
     } catch (err: unknown) {

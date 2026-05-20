@@ -31,7 +31,7 @@ export default function LoginScreen() {
     const result = await loginById(employeeId.trim());
     if (!result.success) return;
     if (result.role === 'SUPERVISOR' || result.role === 'ADMIN') {
-      router.replace('/(app)/admin');
+      router.replace('/home');
     } else {
       router.replace('/(app)/home');
     }

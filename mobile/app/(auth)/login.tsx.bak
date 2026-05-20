@@ -1,198 +1,103 @@
 /**
- * ParkiPay — Login Screen
- * Officer login: employee_id + password.
- * TATURA palette, bilingual UI (Swahili / English), lockout feedback.
- * All auth logic lives in useAuth(); all field styling in shared Input.
+ * ParkiPay — Login  (v3: employee-ID only, role-based routing)
  */
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui';
-import {
-  Colors,
-  SprintColors,
-  FontSize,
-  FontWeight,
-  Spacing,
-  Radius,
-  Shadows,
-  LetterSpacing,
-} from '@/constants/theme';
+import { useSettingsStore } from '@/store/settingsStore';
+import { t } from '@/constants/i18n';
+import { Colors, SprintColors, FontSize, Spacing, Radius, Shadows } from '@/constants/theme';
 
 export default function LoginScreen() {
-  const { login, isLoading, error, clearError } = useAuth();
+  const { loginById, isLoading, error, clearError } = useAuth();
+  const { language } = useSettingsStore();
+  const tr = (k: string) => t(language, k);
 
   const [employeeId, setEmployeeId] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Derive bilingual error message from structured hook error
-  const errorMessage: string | null = localError ?? (
-    error
-      ? error.code === 'account_locked'
-        ? `Akaunti yako imefungwa kwa muda.\n(Your account is temporarily locked.)${
-            error.lockedUntil
-              ? `\nUntil: ${new Date(error.lockedUntil).toLocaleTimeString()}`
-              : ''
-          }`
-        : error.code === 'invalid_credentials'
-        ? `Nambari ya utumishi au nenosiri si sahihi.\n(Invalid employee ID or password.)${
-            error.remainingAttempts !== undefined
-              ? `\nMajaribio yaliyobaki: ${error.remainingAttempts}`
-              : ''
-          }`
-        : `Hitilafu ya muunganisho. Jaribu tena.\n(Connection error. Please try again.)`
-      : null
-  );
-
-  const handleFieldChange = () => { setLocalError(null); clearError(); };
+  const errMsg = localError ?? (error ? tr('invalidId') : null);
 
   const handleLogin = async () => {
-    setLocalError(null);
-    clearError();
-
-    if (!employeeId.trim()) {
-      setLocalError('Tafadhali ingiza nambari yako ya utumishi.\n(Please enter your employee ID.)');
-      return;
-    }
-    if (!password) {
-      setLocalError('Tafadhali ingiza nenosiri lako.\n(Please enter your password.)');
-      return;
-    }
-
-    const result = await login(employeeId, password);
-    if (result.success) {
+    setLocalError(null); clearError();
+    if (!employeeId.trim()) { setLocalError(tr('enterIdError')); return; }
+    const result = await loginById(employeeId.trim());
+    if (!result.success) return;
+    if (result.role === 'SUPERVISOR' || result.role === 'ADMIN') {
+      router.replace('/(app)/admin');
+    } else {
       router.replace('/(app)/home');
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Branding Header ───────────────────────────────────────── */}
-        <View style={styles.headerBlock}>
-          <LinearGradient
-            colors={[SprintColors.green, SprintColors.yellow]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.headerAccent}
-          />
-          <View style={styles.wordmarkRow}>
-            <Text style={[styles.wordmarkText, { color: SprintColors.green }]}>Parki</Text>
-            <Text style={[styles.wordmarkText, { color: SprintColors.yellow }]}>Pay</Text>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
+        {/* Header */}
+        <View style={styles.header}>
+          <LinearGradient colors={[SprintColors.green, SprintColors.yellow]}
+            start={{x:0,y:0}} end={{x:1,y:0}} style={styles.accent} />
+          <View style={{flexDirection:'row'}}>
+            <Text style={[styles.logo,{color:SprintColors.green}]}>Parki</Text>
+            <Text style={[styles.logo,{color:SprintColors.yellow}]}>Pay</Text>
           </View>
-          <Text style={styles.subtitle}>Mfumo wa Maegesho wa Serikali</Text>
-          <Text style={styles.subtitleEn}>Government Parking Management System</Text>
+          <Text style={styles.sub1}>{tr('taglineSw')}</Text>
+          <Text style={styles.sub2}>{tr('taglineEn')}</Text>
         </View>
 
-        {/* ── Login Card ────────────────────────────────────────────── */}
+        {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Ingia / Sign In</Text>
-          <Text style={styles.cardSubtitle}>
-            Tumia nambari yako ya utumishi{'\n'}Use your government employee ID
-          </Text>
+          <Text style={styles.title}>{tr('signIn')}</Text>
+          <Text style={styles.subtitle}>{tr('signInSub')}</Text>
 
-          {/* Employee ID Field */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Nambari ya Utumishi / Employee ID</Text>
+          <Text style={styles.label}>{tr('officerId')}</Text>
+          <View style={[styles.inputRow, errMsg && styles.inputErr]}>
+            <Ionicons name="id-card-outline" size={18} color={errMsg ? Colors.error : '#6B7280'}
+              style={{marginLeft:12}} />
             <TextInput
-              style={[styles.input, errorMessage ? styles.inputError : null]}
+              style={styles.input}
               value={employeeId}
-              onChangeText={(t) => { handleFieldChange(); setEmployeeId(t); }}
-              placeholder="e.g. TZ-2024-001"
-              placeholderTextColor={Colors.grey400}
+              onChangeText={v => { setLocalError(null); clearError(); setEmployeeId(v); }}
+              placeholder="e.g. TZ-8821"
+              placeholderTextColor="#9CA3AF"
               autoCapitalize="characters"
               autoCorrect={false}
-              returnKeyType="next"
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
               editable={!isLoading}
             />
           </View>
 
-          {/* Password Field */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Nenosiri / Password</Text>
-            <View style={styles.passwordWrapper}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, errorMessage ? styles.inputError : null]}
-                value={password}
-                onChangeText={(t) => { handleFieldChange(); setPassword(t); }}
-                placeholder="••••••••"
-                placeholderTextColor={Colors.grey400}
-                secureTextEntry={!showPassword}
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-                editable={!isLoading}
-              />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowPassword((v) => !v)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Error Banner */}
-          {errorMessage ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
+          {errMsg ? (
+            <View style={styles.errBox}>
+              <Ionicons name="alert-circle-outline" size={15} color={Colors.error} />
+              <Text style={styles.errText}>{errMsg}</Text>
             </View>
           ) : null}
 
-          {/* Submit */}
-          <Button
-            label="Ingia / Login"
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={isLoading}
-            onPress={handleLogin}
-            style={{ marginTop: Spacing.sm }}
-          />
-
-          {/* Forgot password (Phase 2) */}
-          <Pressable style={styles.forgotRow}>
-            <Text style={styles.forgotText}>
-              Umesahau nenosiri?{' '}
-              <Text style={styles.forgotLink}>Wasiliana na Msimamizi</Text>
-            </Text>
-          </Pressable>
+          <TouchableOpacity style={[styles.btn, isLoading && {opacity:0.6}]}
+            onPress={handleLogin} disabled={isLoading} activeOpacity={0.85}>
+            {isLoading
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                  <Ionicons name="log-in-outline" size={20} color="#fff" />
+                  <Text style={styles.btnText}>{tr('signInBtn')}</Text>
+                </>}
+          </TouchableOpacity>
         </View>
 
-        {/* ── Footer ───────────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <LinearGradient
-            colors={[SprintColors.yellow, SprintColors.black]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.footerAccent}
-          />
-          <Text style={styles.footerText}>
-            © 2026 Serikali ya Tanzania — ParkiPay v1.0
-          </Text>
+          <LinearGradient colors={[SprintColors.yellow, SprintColors.black]}
+            start={{x:0,y:0}} end={{x:1,y:0}} style={styles.footerAccent} />
+          <Text style={styles.footerText}>© 2026 Serikali ya Tanzania — ParkiPay v1.0</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -200,77 +105,29 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.backgroundSecondary },
-
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.base,
-    paddingBottom: Spacing['3xl'],
-  },
-
-  // Header
-  headerBlock: { alignItems: 'center', paddingTop: Spacing['4xl'], paddingBottom: Spacing.xl },
-  headerAccent: { width: 180, height: 4, borderRadius: 2, marginBottom: Spacing.lg },
-  wordmarkRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: Spacing.sm },
-  wordmarkText: {
-    fontSize: FontSize['3xl'],
-    fontWeight: FontWeight.black,
-    letterSpacing: LetterSpacing.display,
-    shadowColor: SprintColors.green,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-  },
-  subtitle: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.grey700,
-    textAlign: 'center',
-  },
-  subtitleEn: { fontSize: FontSize.sm, color: Colors.grey500, textAlign: 'center', marginTop: 2 },
-
-  // Card
-  card: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.xl, ...Shadows.md },
-  cardTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.xs },
-  cardSubtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20, marginBottom: Spacing.xl },
-
-  // Fields
-  fieldGroup: { marginBottom: Spacing.md },
-  label: { fontSize: FontSize.sm, fontWeight: FontWeight.semiBold, color: Colors.textSecondary, marginBottom: Spacing.xs },
-  input: {
-    height: 52,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.base,
-    fontSize: FontSize.base,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.white,
-  },
-  inputError: { borderColor: Colors.error },
-  passwordWrapper: { position: 'relative' },
-  passwordInput: { paddingRight: 52 },
-  eyeBtn: { position: 'absolute', right: 14, top: 0, bottom: 0, justifyContent: 'center' },
-  eyeIcon: { fontSize: 20 },
-
-  // Error
-  errorBox: {
-    backgroundColor: Colors.errorSurface,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.base,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.error,
-  },
-  errorText: { fontSize: FontSize.sm, color: Colors.error, lineHeight: 18 },
-
-  // Forgot
-  forgotRow: { marginTop: Spacing.base, alignItems: 'center' },
-  forgotText: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
-  forgotLink: { color: SprintColors.green, fontWeight: FontWeight.semiBold },
-
-  // Footer
-  footer: { alignItems: 'center', marginTop: Spacing['2xl'], gap: Spacing.sm },
-  footerAccent: { width: 80, height: 3, borderRadius: 2 },
-  footerText: { fontSize: FontSize.xs, color: Colors.grey400, textAlign: 'center', letterSpacing: 0.3 },
+  root:{ flex:1, backgroundColor: Colors.backgroundSecondary },
+  scroll:{ flexGrow:1, paddingHorizontal:20, paddingBottom:40 },
+  header:{ alignItems:'center', paddingTop:60, paddingBottom:28 },
+  accent:{ width:180, height:4, borderRadius:2, marginBottom:16 },
+  logo:{ fontSize:36, fontWeight:'900', letterSpacing:1 },
+  sub1:{ fontSize:13, color:'#404040', marginTop:4 },
+  sub2:{ fontSize:13, color:'#737373' },
+  card:{ backgroundColor:'#fff', borderRadius:16, padding:24, ...Shadows.md },
+  title:{ fontSize:28, fontWeight:'800', textAlign:'center', color:'#1A1A1A', marginBottom:4 },
+  subtitle:{ fontSize:13, color:'#595959', textAlign:'center', marginBottom:24, lineHeight:20 },
+  label:{ fontSize:13, fontWeight:'700', color:'#1A1A1A', marginBottom:6 },
+  inputRow:{ flexDirection:'row', alignItems:'center', height:54, borderWidth:1.5,
+    borderColor:'#D1D5DB', borderRadius:12, backgroundColor:'#fff' },
+  inputErr:{ borderColor: Colors.error },
+  input:{ flex:1, fontSize:15, color:'#1A1A1A', paddingHorizontal:10 },
+  errBox:{ flexDirection:'row', alignItems:'center', gap:6,
+    backgroundColor: Colors.errorSurface, borderRadius:10, padding:10,
+    marginTop:8, borderLeftWidth:3, borderLeftColor: Colors.error },
+  errText:{ fontSize:13, color: Colors.error, flex:1 },
+  btn:{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:10,
+    height:56, backgroundColor:'#0D1117', borderRadius:12, marginTop:20 },
+  btnText:{ color:'#fff', fontSize:15, fontWeight:'700', letterSpacing:0.4 },
+  footer:{ alignItems:'center', marginTop:32, gap:8 },
+  footerAccent:{ width:80, height:3, borderRadius:2 },
+  footerText:{ fontSize:11, color:'#8C8C8C' },
 });
