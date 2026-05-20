@@ -74,7 +74,6 @@ app.use('/api/health/',   require('./routes/health'));
 app.use('/api/auth/',     require('./routes/auth'));
 app.use('/api/vehicles/', require('./routes/vehicles'));
 app.use('/api/billing/',  require('./routes/billing'));
-app.use('/api/admin/',    require('./routes/admin'));
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) =>

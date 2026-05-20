@@ -129,21 +129,35 @@ apiClient.interceptors.response.use(
 
 // ── Typed helpers ─────────────────────────────────────────────────────────────
 
-// ── Auth: ID-only login ───────────────────────────────────────────────────────
 export const authService = {
-  loginById: (employee_id: string) =>
-    apiClient.post('/api/auth/login/', { employee_id }),
+  login: (employee_id: string, password: string) =>
+    apiClient.post(API_ROUTES.login, { employee_id, password }),
+
   logout: (refresh: string) =>
-    apiClient.post('/api/auth/logout/', { refresh }),
-  me: () => apiClient.get('/api/auth/me/'),
+    apiClient.post(API_ROUTES.logout, { refresh }),
+
+  me: () => apiClient.get(API_ROUTES.me),
 };
 
-// ── Admin service ─────────────────────────────────────────────────────────────
-export const adminService = {
-  listOfficers:  ()                    => apiClient.get('/api/admin/officers/'),
-  listLocations: ()                    => apiClient.get('/api/admin/locations/'),
-  createOfficer: (body: object)        => apiClient.post('/api/admin/officers/', body),
-  removeOfficer: (id: number)          => apiClient.delete(`/api/admin/officers/${id}/`),
-  moveOfficer:   (id: number, locId: number) =>
-    apiClient.patch(`/api/admin/officers/${id}/location/`, { locationId: locId }),
+// ── Biometric Auth Service ────────────────────────────────────────────────────
+
+export const biometricService = {
+  /**
+   * Register a biometric token for an officer after normal login.
+   * The token is a device-generated random string; actual biometric data
+   * never leaves the device — the OS validates it locally.
+   */
+  register: (employee_id: string, token: string) =>
+    apiClient.post('/api/auth/biometric/register/', { employee_id, token }),
+
+  /**
+   * Exchange a biometric token for a JWT pair.
+   * Only called after the OS has confirmed the user's fingerprint/face.
+   */
+  loginWithToken: (token: string) =>
+    apiClient.post('/api/auth/biometric/login/', { token }),
+
+  /** Revoke a biometric token (called on logout or when user disables biometrics). */
+  revoke: (token: string) =>
+    apiClient.post('/api/auth/biometric/revoke/', { token }),
 };
