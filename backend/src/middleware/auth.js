@@ -1,12 +1,14 @@
-// ParkiPay — JWT auth middleware + role guards
+// ParkiPay — JWT auth middleware + role guards  (Redis-cached officer lookup)
 const { verify }  = require('../lib/jwt');
 const prisma      = require('../lib/prisma');
+const redis       = require('../lib/redis');
+
+const OFFICER_TTL = 300; // 5 min
 
 /**
  * authenticate
- * Verifies the Bearer access token in the Authorization header and attaches
- * the full Officer row (with location) to req.officer.
- * Responds with 401 on any failure — never calls next(err).
+ * Verifies Bearer token. Reads officer from Redis cache first; falls back to
+ * Postgres and re-populates the cache. Attaches full Officer row to req.officer.
  */
 async function authenticate(req, res, next) {
   const header = req.headers['authorization'] || '';
@@ -17,12 +19,22 @@ async function authenticate(req, res, next) {
   }
 
   try {
-    const payload = verify(token);
+    const payload  = verify(token);
+    const officerId = parseInt(payload.sub, 10);
 
-    const officer = await prisma.officer.findUnique({
-      where:   { id: parseInt(payload.sub, 10) },
-      include: { location: true },
-    });
+    // ── Try Redis cache first ─────────────────────────────────────────────
+    const cacheKey = `officer:${officerId}`;
+    let officer = await redis.cacheGet(cacheKey);
+
+    if (!officer) {
+      officer = await prisma.officer.findUnique({
+        where:   { id: officerId },
+        include: { location: true },
+      });
+      if (officer) {
+        await redis.cacheSet(cacheKey, officer, OFFICER_TTL);
+      }
+    }
 
     if (!officer || !officer.isActive) {
       return res.status(401).json({ error: 'unauthorized', detail: 'Account inactive or not found.' });
@@ -35,14 +47,6 @@ async function authenticate(req, res, next) {
   }
 }
 
-/**
- * requireRole
- * Factory that returns a middleware enforcing role membership.
- * Must be chained AFTER authenticate.
- *
- * @param {...string} roles  Allowed role strings
- * @returns {Function} Express middleware
- */
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.officer || !roles.includes(req.officer.role)) {

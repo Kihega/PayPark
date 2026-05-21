@@ -24,6 +24,7 @@ function officerProfile(o) {
     phone:        o.phone,
     email:        o.email,
     role:         o.role,
+    locationId:   o.locationId ?? null,
     locationName: o.location ? `${o.location.name}, ${o.location.region}` : null,
     isActive:     o.isActive,
     lastLogin:    o.lastLogin,
