@@ -232,7 +232,7 @@ export default function VehiclesScreen() {
           <View style={S.infoNote}>
             <Ionicons name="information-circle-outline" size={16} color={SprintColors.green} />
             <Text style={[S.infoNoteText, { color: C.textSub }]}>
-              An SMS confirmation will be sent to the owner's phone number.
+              An SMS confirmation will be sent to the owner&apos;s phone number.
             </Text>
           </View>
 

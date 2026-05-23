@@ -8,7 +8,7 @@ export default function AppLayout() {
   const { isAuthenticated } = useAuthStore();
   const { loadSettings }    = useSettingsStore();
 
-  useEffect(() => { loadSettings(); }, []);
+  useEffect(() => { loadSettings(); }, [loadSettings]);
   useEffect(() => {
     if (!isAuthenticated) router.replace('/(auth)/login');
   }, [isAuthenticated]);

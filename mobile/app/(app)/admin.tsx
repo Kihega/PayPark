@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore, palette } from '@/store/settingsStore';
 import { t } from '@/constants/i18n';
-import { adminService, authService } from '@/services/api';
+import { adminService } from '@/services/api';
 import { SprintColors } from '@/constants/theme';
 import ConfirmModal from '@/components/ConfirmModal';
 
@@ -22,8 +22,8 @@ const ROLE_COLORS: Record<string,string> = {
 };
 
 export default function AdminScreen() {
-  const { clearAuth, refreshToken, officer: me } = useAuthStore();
-  const { language, theme, setLanguage, setTheme } = useSettingsStore();
+  const { clearAuth, refreshToken } = useAuthStore();
+  const { language, theme, setLanguage, setTheme } = useSettingsStore(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const C = palette(theme);
   const tr = (k:string) => t(language, k);
 
@@ -39,7 +39,9 @@ export default function AdminScreen() {
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Officer|null>(null);
   const [confirmAlert, setConfirmAlert] = useState<{title:string;message:string;variant:any;onOk:()=>void}|null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [langOpen,     setLangOpen]     = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [modeOpen,     setModeOpen]     = useState(false);
 
   const load = useCallback(async () => {
@@ -73,6 +75,7 @@ export default function AdminScreen() {
   };
 
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleRemove = (o: Officer) => setRemoveTarget(o);
 
   const confirmRemove = async () => {

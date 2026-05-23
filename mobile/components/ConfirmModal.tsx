@@ -3,7 +3,7 @@
  * Replaces native Alert.alert with a polished card dialog.
  */
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSettingsStore, palette } from '@/store/settingsStore';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info' | 'success';

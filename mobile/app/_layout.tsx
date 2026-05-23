@@ -5,7 +5,7 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 
 export const unstable_settings = { anchor: '(auth)' };
@@ -13,7 +13,7 @@ export const unstable_settings = { anchor: '(auth)' };
 export default function RootLayout() {
   const { isLoading, isAuthenticated, officer, loadStoredAuth } = useAuthStore();
 
-  useEffect(() => { loadStoredAuth(); }, []);
+  useEffect(() => { loadStoredAuth(); }, [loadStoredAuth]);
 
   useEffect(() => {
     if (isLoading) return;

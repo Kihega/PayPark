@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { useSettingsStore } from '@/store/settingsStore';
 import { t } from '@/constants/i18n';
-import { Colors, SprintColors, FontSize, Spacing, Radius, Shadows } from '@/constants/theme';
+import { Colors, SprintColors, Shadows } from '@/constants/theme';
 
 export default function LoginScreen() {
   const { loginById, isLoading, error, clearError } = useAuth();
