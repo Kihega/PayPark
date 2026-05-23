@@ -2,11 +2,9 @@
  * ParkiPay — Admin Screen (simple officer management)
  */
 import { useState, useEffect, useCallback } from 'react';
-import {
-  ActivityIndicator, FlatList, Modal, Platform, Pressable,
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable,
   SafeAreaView, StatusBar, StyleSheet, Text, TextInput,
-  TouchableOpacity, View,
-} from 'react-native';
+  TouchableOpacity, View, Alert } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';

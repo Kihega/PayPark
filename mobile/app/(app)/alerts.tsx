@@ -48,7 +48,9 @@ const TYPE_CFG: Record<LocalAlert['type'] | 'EXPIRED', {
     icon:'time-outline',              color:'#6B7280', label:'EXPIRED'   },
 };
 
-interface AnyAlert extends LocalAlert { type: LocalAlert['type'] | 'EXPIRED'; }
+interface AnyAlert extends Omit<LocalAlert, 'type'> {
+  type: LocalAlert['type'] | 'EXPIRED';
+}
 
 export default function AlertsScreen() {
   const { theme } = useSettingsStore();

@@ -114,12 +114,18 @@ router.post('/generate/', async (req, res, next) => {
     // ── 7. SMS to vehicle owner (if registered) ───────────────────────────
     if (vehicle?.ownerPhone) {
       const { sendSMS } = require('../lib/sms');
+      const startTime = new Date(bill.generatedAt);
+      const endTime   = new Date(bill.expiresAt);
+      const fmt = (d) => d.toTimeString().slice(0, 8); // HH:MM:SS
+
       const smsText =
-        `ParkiPay: Gari ${plate} limepewa bili ya maegesho. ` +
-        `Nambari ya udhibiti: ${bill.controlNumber}. ` +
-        `Kiasi: TZS ${Number(amountDue).toLocaleString()}. ` +
-        `Muda: Saa ${cfg.billing.validityHours} kutoka sasa.`;
-      sendSMS(vehicle.ownerPhone, smsText).catch(() => {}); // fire-and-forget
+        `Habari ndugu ${vehicle.ownerName},\n` +
+        `Nambari yako ya malipo ya maegesho ya ${location.name} ni ${bill.controlNumber}.\n` +
+        `Muda wa kuanza: ${fmt(startTime)}\n` +
+        `Muda wa kuisha: ${fmt(endTime)}`;
+
+      sendSMS(vehicle.ownerPhone, smsText).catch((e) =>
+        console.error('[Billing] SMS fire-and-forget error:', e.message));
     }
 
     await logAction(req.officer, logAction.ACTIONS.BILL_GENERATED, {

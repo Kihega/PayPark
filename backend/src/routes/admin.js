@@ -87,11 +87,36 @@ router.post('/officers/', async (req, res, next) => {
 router.delete('/officers/:id/', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
-    await prisma.officer.delete({ where: { id } });
-    // Invalidate Redis cache for this officer
-    await redis.cacheDel(`officer:${id}`);
-    res.json({ detail: 'Officer removed.' });
-  } catch (err) { next(err); }
+    if (isNaN(id)) return res.status(400).json({ error: 'invalid_id', detail: 'Invalid officer ID.' });
+
+    const officer = await prisma.officer.findUnique({ where: { id }, select: { id: true, fullName: true } });
+    if (!officer) return res.status(404).json({ error: 'not_found', detail: 'Officer not found.' });
+
+    if (id === req.officer.id) {
+      return res.status(400).json({ error: 'self_delete', detail: 'You cannot remove your own account.' });
+    }
+
+    // Interactive transaction: nullify all FK references, then delete
+    // Uses tx (not prisma) so everything is inside ONE database transaction.
+    await prisma.$transaction(async (tx) => {
+      // 1. Nullify FK on audit_logs  (officerId is optional → can be set null)
+      await tx.auditLog.updateMany({ where: { officerId: id }, data: { officerId: null } });
+      // 2. Nullify FK on control_numbers  (same)
+      await tx.controlNumber.updateMany({ where: { officerId: id }, data: { officerId: null } });
+      // 3. OfficerBiometric has onDelete: Cascade in schema — Prisma handles it automatically
+      // 4. Now safe to delete the officer row
+      await tx.officer.delete({ where: { id } });
+    });
+
+    // Bust Redis caches for this officer
+    await redis.cacheDel(`officer:${id}`, `stats:${id}`);
+
+    res.json({ detail: `Officer "${officer.fullName}" removed successfully.` });
+  } catch (err) {
+    // Surface the real Prisma error message in development
+    console.error('[Admin] Officer delete failed:', err.message);
+    next(err);
+  }
 });
 
 // ── PATCH /api/admin/officers/:id/location/ ───────────────────────────────────
@@ -185,16 +210,25 @@ router.post('/vehicles/', async (req, res, next) => {
 router.delete('/vehicles/:id/', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'invalid_id', detail: 'Invalid vehicle ID.' });
+
     const vehicle = await prisma.vehicle.findUnique({ where: { id }, select: { plateNumber: true } });
     if (!vehicle)
       return res.status(404).json({ error: 'not_found', detail: 'Vehicle not found.' });
 
-    await prisma.vehicle.delete({ where: { id } });
-    // Invalidate cache
-    await redis.cacheDel(`vehicle:${vehicle.plateNumber}`);
+    // Interactive transaction: nullify vehicleId on any bills referencing this vehicle, then delete
+    await prisma.$transaction(async (tx) => {
+      // Nullify FK on control_numbers.vehicleId (optional field)
+      await tx.controlNumber.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
+      await tx.vehicle.delete({ where: { id } });
+    });
 
+    await redis.cacheDel(`vehicle:${vehicle.plateNumber}`);
     res.json({ detail: 'Vehicle removed from registry.' });
-  } catch (err) { next(err); }
+  } catch (err) {
+    console.error('[Admin] Vehicle delete failed:', err.message);
+    next(err);
+  }
 });
 
 module.exports = router;
