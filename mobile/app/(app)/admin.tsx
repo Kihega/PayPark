@@ -2,11 +2,9 @@
  * ParkiPay — Admin Screen (simple officer management)
  */
 import { useState, useEffect, useCallback } from 'react';
-import {
-  ActivityIndicator, Alert, FlatList, Modal, Pressable,
-  SafeAreaView, StyleSheet, Text, TextInput,
-  TouchableOpacity, View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable,
+  SafeAreaView, StatusBar, StyleSheet, Text, TextInput,
+  TouchableOpacity, View, Alert } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -14,6 +12,7 @@ import { useSettingsStore, palette } from '@/store/settingsStore';
 import { t } from '@/constants/i18n';
 import { adminService } from '@/services/api';
 import { SprintColors } from '@/constants/theme';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface Officer { id:number; employeeId:string; fullName:string; locationName:string|null; role:string; }
 interface Location { id:number; name:string; region:string; }
@@ -23,20 +22,27 @@ const ROLE_COLORS: Record<string,string> = {
 };
 
 export default function AdminScreen() {
-  const { clearAuth, refreshToken, officer: me } = useAuthStore();
-  const { language, theme } = useSettingsStore();
+  const { clearAuth, refreshToken } = useAuthStore();
+  const { language, theme, setLanguage, setTheme } = useSettingsStore(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const C = palette(theme);
   const tr = (k:string) => t(language, k);
 
-  const [officers,   setOfficers]   = useState<Officer[]>([]);
-  const [locations,  setLocations]  = useState<Location[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [showMove,   setShowMove]   = useState<Officer|null>(null);
-  const [newName,    setNewName]    = useState('');
-  const [newEmpId,   setNewEmpId]   = useState('');
-  const [newLocId,   setNewLocId]   = useState<number|null>(null);
-  const [saving,     setSaving]     = useState(false);
+  const [officers,     setOfficers]     = useState<Officer[]>([]);
+  const [locations,    setLocations]    = useState<Location[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [showMove,     setShowMove]     = useState<Officer|null>(null);
+  const [newName,      setNewName]      = useState('');
+  const [newEmpId,     setNewEmpId]     = useState('');
+  const [newLocId,     setNewLocId]     = useState<number|null>(null);
+  const [saving,       setSaving]       = useState(false);
+  const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Officer|null>(null);
+  const [confirmAlert, setConfirmAlert] = useState<{title:string;message:string;variant:any;onOk:()=>void}|null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [langOpen,     setLangOpen]     = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [modeOpen,     setModeOpen]     = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,14 +74,19 @@ export default function AdminScreen() {
     } finally { setSaving(false); }
   };
 
-  const handleRemove = (o:Officer) => {
-    Alert.alert(tr('confirmRemove'), o.fullName, [
-      { text: tr('cancel'), style:'cancel' },
-      { text: tr('remove'), style:'destructive', onPress: async () => {
-        try { await adminService.removeOfficer(o.id); load(); }
-        catch { Alert.alert('Error','Failed to remove officer'); }
-      }},
-    ]);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleRemove = (o: Officer) => setRemoveTarget(o);
+
+  const confirmRemove = async () => {
+    if (!removeTarget) return;
+    setRemoveTarget(null);
+    try { await adminService.removeOfficer(removeTarget.id); load(); }
+    catch (e: any) {
+      const msg = e?.response?.data?.detail ?? 'Failed to remove officer.';
+      setConfirmAlert({ title: 'Error', message: msg, variant: 'warning',
+        onOk: () => setConfirmAlert(null) });
+    }
   };
 
   const handleMove = async (locationId: number) => {
@@ -92,15 +103,66 @@ export default function AdminScreen() {
     await clearAuth(); router.replace('/(auth)/login');
   };
 
+  const topOffset = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
   return (
-    <SafeAreaView style={[styles.root, {backgroundColor: C.bg}]}>
+    <SafeAreaView style={[styles.root, {backgroundColor: C.bg, paddingTop: topOffset}]}>
       {/* Header */}
       <View style={[styles.header, {backgroundColor: C.headerBg}]}>
-        <Text style={[styles.headerTitle, {color: C.headerText}]}>{tr('adminPanel')}</Text>
+        <TouchableOpacity onPress={() => setSidebarOpen(true)} style={styles.menuBtn}>
+          <Ionicons name="menu" size={22} color="#fff" />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, {color: '#fff'}]}>{tr('adminPanel')}</Text>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
           <Ionicons name="log-out-outline" size={20} color="#EF4444" />
         </TouchableOpacity>
       </View>
+
+      {/* ── Sidebar ────────────────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <Modal transparent animationType="none" visible={sidebarOpen} onRequestClose={() => setSidebarOpen(false)}>
+          <Pressable style={styles.sidebarOverlay} onPress={() => setSidebarOpen(false)} />
+          <View style={[styles.sidebarPanel, {backgroundColor: C.sidebarBg ?? '#111827'}]}>
+            <View style={styles.sbTop}>
+              <MaterialCommunityIcons name="shield-account" size={28} color={SprintColors.yellow} />
+              <Text style={styles.sbTitle}>Admin Menu</Text>
+              <TouchableOpacity onPress={() => setSidebarOpen(false)} style={styles.sbClose}>
+                <Ionicons name="close" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sbDivider} />
+
+            {[
+              { icon: 'people-outline', matIcon: null, label: 'Manage Officers',
+                sub: 'Officer management & locations', onPress: () => setSidebarOpen(false) },
+              { icon: null, matIcon: 'car-outline', label: 'Register Cars',
+                sub: 'Vehicle registry management',
+                onPress: () => { setSidebarOpen(false); router.push('/(app)/vehicles'); }},
+            ].map(item => (
+              <TouchableOpacity key={item.label} style={styles.sbItem} onPress={item.onPress}>
+                <View style={styles.sbItemIcon}>
+                  {item.matIcon
+                    ? <MaterialCommunityIcons name={item.matIcon as any} size={22} color={SprintColors.green} />
+                    : <Ionicons name={item.icon as any} size={22} color={SprintColors.green} />
+                  }
+                </View>
+                <View style={{flex:1}}>
+                  <Text style={styles.sbItemLabel}>{item.label}</Text>
+                  <Text style={styles.sbItemSub}>{item.sub}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.sbDivider} />
+
+            <TouchableOpacity style={styles.sbLogout} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+              <Text style={styles.sbLogoutText}>{tr('logout')}</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
 
       {/* Officers list */}
       {loading
@@ -138,7 +200,7 @@ export default function AdminScreen() {
                     <Ionicons name="swap-horizontal-outline" size={18} color={SprintColors.green}/>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.actionBtn,{backgroundColor:'rgba(239,68,68,0.08)'}]}
-                    onPress={()=>handleRemove(o)}>
+                    onPress={()=>setRemoveTarget(o)}>
                     <Ionicons name="trash-outline" size={18} color="#EF4444"/>
                   </TouchableOpacity>
                 </View>
@@ -204,6 +266,32 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Remove Officer Confirm ────────────────────────────────────── */}
+      <ConfirmModal
+        visible={!!removeTarget}
+        title={`Remove ${removeTarget?.fullName ?? ''}?`}
+        message="This will permanently remove the officer from the system. Their bills will be retained."
+        confirmLabel="Remove Officer"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={confirmRemove}
+        onCancel={() => setRemoveTarget(null)}
+      />
+
+      {/* ── Generic Alert Modal ───────────────────────────────────────── */}
+      {confirmAlert && (
+        <ConfirmModal
+          visible
+          title={confirmAlert.title}
+          message={confirmAlert.message}
+          variant={confirmAlert.variant}
+          confirmLabel="OK"
+          cancelLabel=""
+          onConfirm={confirmAlert.onOk}
+          onCancel={confirmAlert.onOk}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -211,9 +299,36 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   root:{ flex:1 },
   header:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
-    paddingHorizontal:16, paddingVertical:14 },
+    paddingHorizontal:16, paddingVertical:14, backgroundColor:'#0D1117' },
   headerTitle:{ fontSize:18, fontWeight:'800' },
+  menuBtn:{ width:36, height:36, borderRadius:10, alignItems:'center', justifyContent:'center',
+    backgroundColor:'rgba(255,255,255,0.1)' },
   logoutBtn:{ padding:6 },
+  // Sidebar
+  sidebarOverlay:{ ...StyleSheet.absoluteFillObject, backgroundColor:'rgba(0,0,0,0.5)' },
+  sidebarPanel:{ position:'absolute', left:0, top:0, bottom:0, width:280,
+    paddingTop:56, paddingHorizontal:0, zIndex:99 },
+  sbTop:{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:20, marginBottom:20 },
+  sbTitle:{ flex:1, fontSize:17, fontWeight:'800', color:'#F9FAFB' },
+  sbClose:{ padding:4 },
+  sbDivider:{ height:1, backgroundColor:'rgba(255,255,255,0.08)', marginHorizontal:20, marginVertical:8 },
+  sbItem:{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:20,
+    paddingVertical:14 },
+  sbItemIcon:{ width:38, height:38, borderRadius:10, alignItems:'center', justifyContent:'center',
+    backgroundColor:'rgba(30,181,58,0.12)' },
+  sbItemLabel:{ fontSize:15, fontWeight:'700', color:'#F9FAFB' },
+  sbItemSub:{ fontSize:11, color:'#6B7280', marginTop:1 },
+  sbLogout:{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:20,
+    paddingVertical:14 },
+  sbLogoutText:{ color:'#EF4444', fontWeight:'700', fontSize:15 },
+  sbMenuRow:{ flexDirection:'row', alignItems:'center', gap:10,
+    paddingHorizontal:20, paddingVertical:12 },
+  sbMenuLabel:{ flex:1, fontSize:14, color:'#D1D5DB', fontWeight:'600' },
+  sbDropdown:{ marginHorizontal:20, borderRadius:10, overflow:'hidden', marginBottom:4,
+    backgroundColor:'rgba(255,255,255,0.05)' },
+  sbDropdownItem:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
+    paddingHorizontal:14, paddingVertical:11 },
+  sbDropdownText:{ fontSize:13, fontWeight:'600' },
   emptyWrap:{ alignItems:'center', marginTop:60, gap:12 },
   emptyText:{ fontSize:15 },
   card:{ borderRadius:14, padding:16, marginBottom:10, flexDirection:'row',

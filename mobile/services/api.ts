@@ -147,3 +147,27 @@ export const adminService = {
   moveOfficer:   (id: number, locId: number) =>
     apiClient.patch(`/api/admin/officers/${id}/location/`, { locationId: locId }),
 };
+
+// ── Vehicle lookup service ────────────────────────────────────────────────────
+export const vehicleService = {
+  lookup:    (plate: string) => apiClient.get(`/api/vehicles/lookup/?plate=${encodeURIComponent(plate)}`),
+  locations: ()              => apiClient.get('/api/vehicles/locations/'),
+};
+
+// ── Vehicle registry management (admin) ──────────────────────────────────────
+export const vehicleRegistryService = {
+  list:     ()              => apiClient.get('/api/admin/vehicles/'),
+  register: (body: object)  => apiClient.post('/api/admin/vehicles/', body),
+  remove:   (id: number)    => apiClient.delete(`/api/admin/vehicles/${id}/`),
+};
+
+// ── Billing service ───────────────────────────────────────────────────────────
+export const billingService = {
+  generate:   (plate_number: string, location_id: number) =>
+    apiClient.post('/api/billing/generate/', { plate_number, location_id }),
+  history:    () => apiClient.get('/api/billing/history/'),
+  stats:      () => apiClient.get('/api/billing/stats/'),
+  activeBill: (plate: string) =>
+    apiClient.get(`/api/billing/active-bill/?plate=${encodeURIComponent(plate)}`),
+  status:     (cn: string) => apiClient.get(`/api/billing/${cn}/status/`),
+};

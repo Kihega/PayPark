@@ -11,6 +11,7 @@ export interface OfficerProfile {
   phone: string;
   email: string;
   role: 'FIELD_OFFICER' | 'SUPERVISOR' | 'ADMIN';
+  locationId: number | null;
   locationName: string | null;
   isActive: boolean;
   lastLogin: string | null;
@@ -64,11 +65,52 @@ export const useAuthStore = create<AuthState>((set) => ({
         SecureStore.getItemAsync(KEYS.REFRESH),
         SecureStore.getItemAsync(KEYS.OFFICER),
       ]);
-      if (access && refresh && profileJson) {
-        set({ accessToken: access, refreshToken: refresh,
-          officer: JSON.parse(profileJson), isAuthenticated: true });
+
+      if (!access || !refresh || !profileJson) {
+        // No stored credentials → go to login
+        set({ isLoading: false });
+        return;
       }
-    } catch { /* start unauthenticated */ } finally {
+
+      // Decode access token to check expiry client-side (no network needed)
+      let isExpired = true;
+      try {
+        const payload = JSON.parse(
+          Buffer.from(access.split('.')[1], 'base64').toString('utf-8')
+        );
+        isExpired = (payload.exp ?? 0) * 1000 < Date.now();
+      } catch { isExpired = true; }
+
+      if (isExpired) {
+        // Access token expired — try a silent refresh via the API interceptor
+        // Set credentials first so the interceptor can use the refresh token
+        set({ accessToken: access, refreshToken: refresh,
+              officer: JSON.parse(profileJson), isAuthenticated: false });
+
+        try {
+          // Import lazily to avoid circular dependency
+          const { authService } = require('@/services/api');
+          await authService.refreshToken(refresh);
+          // If refresh succeeded, the interceptor already called setAuth
+          // (handled in the API interceptor); just mark loaded
+          set({ isLoading: false });
+        } catch {
+          // Refresh failed → force login
+          await Promise.all([
+            SecureStore.deleteItemAsync(KEYS.ACCESS).catch(() => {}),
+            SecureStore.deleteItemAsync(KEYS.REFRESH).catch(() => {}),
+            SecureStore.deleteItemAsync(KEYS.OFFICER).catch(() => {}),
+          ]);
+          set({ accessToken: null, refreshToken: null, officer: null,
+                isAuthenticated: false, isLoading: false });
+        }
+      } else {
+        // Token still valid — restore session immediately
+        set({ accessToken: access, refreshToken: refresh,
+              officer: JSON.parse(profileJson),
+              isAuthenticated: true, isLoading: false });
+      }
+    } catch {
       set({ isLoading: false });
     }
   },
