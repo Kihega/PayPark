@@ -44,6 +44,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     await SecureStore.setItemAsync(KEYS.REFRESH, refreshToken);
     await SecureStore.setItemAsync(KEYS.OFFICER, JSON.stringify(officer));
     set({ accessToken, refreshToken, officer, isAuthenticated: true });
+    // Load this officer's personal language/theme preferences
+    const { setOfficerKey } = (await import('./settingsStore')).useSettingsStore.getState();
+    await setOfficerKey(officer.id);
   },
 
   setAccessToken: (token) => {
@@ -52,9 +55,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearAuth: async () => {
-    await SecureStore.deleteItemAsync(KEYS.ACCESS);
-    await SecureStore.deleteItemAsync(KEYS.REFRESH);
-    await SecureStore.deleteItemAsync(KEYS.OFFICER);
+    await Promise.all([
+      SecureStore.deleteItemAsync(KEYS.ACCESS).catch(() => {}),
+      SecureStore.deleteItemAsync(KEYS.REFRESH).catch(() => {}),
+      SecureStore.deleteItemAsync(KEYS.OFFICER).catch(() => {}),
+    ]);
+    // Reset settings to defaults so next user starts fresh
+    const { clearSettings } = (await import('./settingsStore')).useSettingsStore.getState();
+    clearSettings();
     set({ accessToken: null, refreshToken: null, officer: null, isAuthenticated: false });
   },
 
