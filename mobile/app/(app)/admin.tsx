@@ -1,48 +1,65 @@
 /**
- * ParkiPay — Admin Screen (simple officer management)
+ * ParkiPay — Admin Screen  (v2 with sidebar)
  */
 import { useState, useEffect, useCallback } from 'react';
-import { ActivityIndicator, FlatList, Modal, Platform, Pressable,
-  SafeAreaView, StatusBar, StyleSheet, Text, TextInput,
-  TouchableOpacity, View, Alert } from "react-native";
+import {
+  ActivityIndicator, Animated, Dimensions, FlatList, Modal,
+  Platform, Pressable, SafeAreaView, StatusBar, StyleSheet,
+  Text, TextInput, TouchableOpacity, View,
+} from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore }              from '@/store/authStore';
 import { useSettingsStore, palette } from '@/store/settingsStore';
-import { t } from '@/constants/i18n';
-import { adminService } from '@/services/api';
-import { SprintColors } from '@/constants/theme';
-import ConfirmModal from '@/components/ConfirmModal';
+import { t }                         from '@/constants/i18n';
+import { adminService }              from '@/services/api';
+import { SprintColors }              from '@/constants/theme';
 
-interface Officer { id:number; employeeId:string; fullName:string; locationName:string|null; role:string; }
+interface Officer  { id:number; employeeId:string; fullName:string; locationName:string|null; role:string; }
 interface Location { id:number; name:string; region:string; }
 
 const ROLE_COLORS: Record<string,string> = {
   FIELD_OFFICER: SprintColors.green, SUPERVISOR: '#1565C0', ADMIN: '#6A1B9A',
 };
+const { width: W } = Dimensions.get('window');
+const SIDEBAR_W    = W * 0.75;
 
 export default function AdminScreen() {
   const { clearAuth, refreshToken } = useAuthStore();
-  const { language, theme, setLanguage, setTheme } = useSettingsStore(); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const C = palette(theme);
-  const tr = (k:string) => t(language, k);
+  const { language, theme, setLanguage, setTheme } = useSettingsStore();
+  const C  = palette(theme);
+  const tr = (k: string) => t(language, k);
 
-  const [officers,     setOfficers]     = useState<Officer[]>([]);
-  const [locations,    setLocations]    = useState<Location[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [showAdd,      setShowAdd]      = useState(false);
-  const [showMove,     setShowMove]     = useState<Officer|null>(null);
-  const [newName,      setNewName]      = useState('');
-  const [newEmpId,     setNewEmpId]     = useState('');
-  const [newLocId,     setNewLocId]     = useState<number|null>(null);
-  const [saving,       setSaving]       = useState(false);
-  const [sidebarOpen,  setSidebarOpen]  = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<Officer|null>(null);
-  const [confirmAlert, setConfirmAlert] = useState<{title:string;message:string;variant:any;onOk:()=>void}|null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [langOpen,     setLangOpen]     = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [modeOpen,     setModeOpen]     = useState(false);
+  const [officers,  setOfficers]  = useState<Officer[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [showMove,  setShowMove]  = useState<Officer|null>(null);
+  const [newName,   setNewName]   = useState('');
+  const [newEmpId,  setNewEmpId]  = useState('');
+  const [newLocId,  setNewLocId]  = useState<number|null>(null);
+  const [saving,    setSaving]    = useState(false);
+
+  // Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [langOpen,    setLangOpen]    = useState(false);
+  const [modeOpen,    setModeOpen]    = useState(false);
+
+  // Confirm modals
+  const [showLogoutModal,  setShowLogoutModal]  = useState(false);
+  const [removeTarget,     setRemoveTarget]     = useState<Officer|null>(null);
+
+  const [slideXAnim] = useState(new Animated.Value(-SIDEBAR_W));
+
+  const openSidebar = () => {
+    setSidebarOpen(true);
+    Animated.spring(slideXAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+  };
+  const closeSidebar = () => {
+    setLangOpen(false); setModeOpen(false);
+    Animated.timing(slideXAnim, { toValue: -SIDEBAR_W, duration: 220, useNativeDriver: true })
+      .start(() => setSidebarOpen(false));
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,284 +68,399 @@ export default function AdminScreen() {
         adminService.listOfficers(),
         adminService.listLocations(),
       ]);
-      setOfficers(oRes.data);
-      setLocations(lRes.data);
-    } catch { Alert.alert('Error','Failed to load data'); }
+      setOfficers(oRes.data as Officer[]);
+      setLocations(lRes.data as Location[]);
+    } catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleAdd = async () => {
-    if (!newName.trim() || !newEmpId.trim()) {
-      Alert.alert('', 'Name and Employee ID are required'); return;
-    }
+    if (!newName.trim() || !newEmpId.trim()) return;
     setSaving(true);
     try {
-      await adminService.createOfficer({ fullName:newName.trim(),
-        employeeId:newEmpId.trim().toUpperCase(), locationId:newLocId });
+      await adminService.createOfficer({ fullName: newName.trim(),
+        employeeId: newEmpId.trim(), locationId: newLocId });
       setShowAdd(false); setNewName(''); setNewEmpId(''); setNewLocId(null);
       load();
-    } catch (e:any) {
-      Alert.alert('Error', e?.response?.data?.detail ?? 'Failed to create officer');
-    } finally { setSaving(false); }
+    } catch { /* silent */ }
+    finally { setSaving(false); }
   };
 
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleRemove = (o: Officer) => setRemoveTarget(o);
+  const handleMove = async (locId: number) => {
+    if (!showMove) return;
+    try {
+      await adminService.moveOfficer(showMove.id, locId);
+      setShowMove(null); load();
+    } catch { /* silent */ }
+  };
 
   const confirmRemove = async () => {
     if (!removeTarget) return;
+    const target = removeTarget;
     setRemoveTarget(null);
-    try { await adminService.removeOfficer(removeTarget.id); load(); }
-    catch (e: any) {
-      const msg = e?.response?.data?.detail ?? 'Failed to remove officer.';
-      setConfirmAlert({ title: 'Error', message: msg, variant: 'warning',
-        onOk: () => setConfirmAlert(null) });
-    }
-  };
-
-  const handleMove = async (locationId: number) => {
-    if (!showMove) return;
     try {
-      await adminService.moveOfficer(showMove.id, locationId);
-      setShowMove(null); load();
-    } catch { Alert.alert('Error','Failed to move officer'); }
+      await adminService.removeOfficer(target.id);
+      load();
+    } catch { /* silent */ }
   };
 
-  const handleLogout = async () => {
-    try { if (refreshToken) await (await import('@/services/api')).authService.logout(refreshToken); }
-    catch {}
-    await clearAuth(); router.replace('/(auth)/login');
+  const doLogout = async () => {
+    setShowLogoutModal(false);
+    try {
+      if (refreshToken) {
+        const { authService } = await import('@/services/api');
+        await authService.logout(refreshToken);
+      }
+    } catch {}
+    await clearAuth();
+    router.replace('/(auth)/login');
   };
 
   const topOffset = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
-  return (
-    <SafeAreaView style={[styles.root, {backgroundColor: C.bg, paddingTop: topOffset}]}>
-      {/* Header */}
-      <View style={[styles.header, {backgroundColor: C.headerBg}]}>
-        <TouchableOpacity onPress={() => setSidebarOpen(true)} style={styles.menuBtn}>
-          <Ionicons name="menu" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, {color: '#fff'}]}>{tr('adminPanel')}</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
+  const S = styles;
 
-      {/* ── Sidebar ────────────────────────────────────────────────────── */}
+  return (
+    <SafeAreaView style={[S.root, { backgroundColor: C.bg, paddingTop: topOffset }]}>
+
+      {/* ══ Sidebar ════════════════════════════════════════════════════ */}
       {sidebarOpen && (
-        <Modal transparent animationType="none" visible={sidebarOpen} onRequestClose={() => setSidebarOpen(false)}>
-          <Pressable style={styles.sidebarOverlay} onPress={() => setSidebarOpen(false)} />
-          <View style={[styles.sidebarPanel, {backgroundColor: C.sidebarBg ?? '#111827'}]}>
-            <View style={styles.sbTop}>
-              <MaterialCommunityIcons name="shield-account" size={28} color={SprintColors.yellow} />
-              <Text style={styles.sbTitle}>Admin Menu</Text>
-              <TouchableOpacity onPress={() => setSidebarOpen(false)} style={styles.sbClose}>
-                <Ionicons name="close" size={20} color="#9CA3AF" />
+        <Modal transparent animationType="none" visible onRequestClose={closeSidebar}>
+          <Pressable style={S.overlay} onPress={closeSidebar} />
+          <Animated.View style={[S.sidebar, { backgroundColor: '#111827',
+            transform: [{ translateX: slideXAnim }] }]}>
+
+            <View style={S.sbHead}>
+              <View style={S.sbIconWrap}>
+                <MaterialCommunityIcons name="shield-account" size={26} color={SprintColors.yellow} />
+              </View>
+              <Text style={S.sbTitle}>Admin Menu</Text>
+              <TouchableOpacity onPress={closeSidebar}>
+                <Ionicons name="close" size={22} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.sbDivider} />
+            <View style={S.sbDivider} />
 
+            {/* Navigate items */}
             {[
-              { icon: 'people-outline', matIcon: null, label: 'Manage Officers',
-                sub: 'Officer management & locations', onPress: () => setSidebarOpen(false) },
-              { icon: null, matIcon: 'car-outline', label: 'Register Cars',
-                sub: 'Vehicle registry management',
-                onPress: () => { setSidebarOpen(false); router.push('/(app)/vehicles'); }},
+              { icon: 'people-outline' as const, label: 'Manage Officers',
+                sub: 'Officer management', onPress: () => closeSidebar() },
+              { icon: 'car-outline' as const, label: 'Register Cars',
+                sub: 'Vehicle registry',
+                onPress: () => { closeSidebar(); router.push('/(app)/vehicles'); } },
             ].map(item => (
-              <TouchableOpacity key={item.label} style={styles.sbItem} onPress={item.onPress}>
-                <View style={styles.sbItemIcon}>
-                  {item.matIcon
-                    ? <MaterialCommunityIcons name={item.matIcon as any} size={22} color={SprintColors.green} />
-                    : <Ionicons name={item.icon as any} size={22} color={SprintColors.green} />
-                  }
+              <TouchableOpacity key={item.label} style={S.sbNavItem} onPress={item.onPress}>
+                <View style={S.sbNavIcon}>
+                  <Ionicons name={item.icon} size={20} color={SprintColors.green} />
                 </View>
-                <View style={{flex:1}}>
-                  <Text style={styles.sbItemLabel}>{item.label}</Text>
-                  <Text style={styles.sbItemSub}>{item.sub}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.sbNavLabel}>{item.label}</Text>
+                  <Text style={S.sbNavSub}>{item.sub}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+                <Ionicons name="chevron-forward" size={15} color="#6B7280" />
               </TouchableOpacity>
             ))}
 
-            <View style={styles.sbDivider} />
+            <View style={S.sbDivider} />
 
-            <TouchableOpacity style={styles.sbLogout} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-              <Text style={styles.sbLogoutText}>{tr('logout')}</Text>
+            {/* Language dropdown */}
+            <TouchableOpacity style={S.sbRow}
+              onPress={() => { setLangOpen(v => !v); setModeOpen(false); }}>
+              <Ionicons name="language-outline" size={18} color="#9CA3AF" />
+              <Text style={S.sbRowLabel}>{tr('language')}</Text>
+              <View style={S.sbRowRight}>
+                <Text style={S.sbRowValue}>
+                  {language === 'en' ? '🇬🇧 English' : '🇹🇿 Kiswahili'}
+                </Text>
+                <Ionicons name={langOpen ? 'chevron-up' : 'chevron-down'} size={14} color="#9CA3AF" />
+              </View>
             </TouchableOpacity>
-          </View>
+            {langOpen && (
+              <View style={S.sbDropdown}>
+                {([['en', '🇬🇧 English (US)'], ['sw', '🇹🇿 Kiswahili']] as const).map(([code, label]) => (
+                  <TouchableOpacity key={code}
+                    style={[S.sbDropItem, language === code && S.sbDropItemActive]}
+                    onPress={() => { setLanguage(code); setLangOpen(false); }}>
+                    <Text style={[S.sbDropText, language === code && { color: SprintColors.green }]}>
+                      {label}
+                    </Text>
+                    {language === code && <Ionicons name="checkmark" size={15} color={SprintColors.green} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Mode dropdown */}
+            <TouchableOpacity style={S.sbRow}
+              onPress={() => { setModeOpen(v => !v); setLangOpen(false); }}>
+              <Ionicons name={theme === 'dark' ? 'moon-outline' : 'sunny-outline'} size={18} color="#9CA3AF" />
+              <Text style={S.sbRowLabel}>Mode</Text>
+              <View style={S.sbRowRight}>
+                <Text style={S.sbRowValue}>{theme === 'dark' ? '🌙 Dark' : '☀️ Light'}</Text>
+                <Ionicons name={modeOpen ? 'chevron-up' : 'chevron-down'} size={14} color="#9CA3AF" />
+              </View>
+            </TouchableOpacity>
+            {modeOpen && (
+              <View style={S.sbDropdown}>
+                {([['light', '☀️ Light'], ['dark', '🌙 Dark']] as const).map(([mode, label]) => (
+                  <TouchableOpacity key={mode}
+                    style={[S.sbDropItem, theme === mode && S.sbDropItemActive]}
+                    onPress={() => { setTheme(mode); setModeOpen(false); }}>
+                    <Text style={[S.sbDropText, theme === mode && { color: SprintColors.green }]}>
+                      {label}
+                    </Text>
+                    {theme === mode && <Ionicons name="checkmark" size={15} color={SprintColors.green} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <View style={S.sbDivider} />
+
+            <TouchableOpacity style={S.sbLogout}
+              onPress={() => { closeSidebar(); setTimeout(() => setShowLogoutModal(true), 260); }}>
+              <View style={S.sbLogoutIcon}>
+                <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+              </View>
+              <Text style={S.sbLogoutText}>{tr('logout')}</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </Modal>
       )}
 
-      {/* Officers list */}
+      {/* ══ Logout Modal ══════════════════════════════════════════════ */}
+      <Modal visible={showLogoutModal} transparent animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}>
+        <Pressable style={S.modalBackdrop} onPress={() => setShowLogoutModal(false)} />
+        <View style={S.modalCenter}>
+          <View style={[S.logoutCard, { backgroundColor: C.card }]}>
+            <View style={S.logoutIconBox}>
+              <Ionicons name="log-out-outline" size={32} color="#EF4444" />
+            </View>
+            <Text style={[S.logoutTitle, { color: C.text }]}>{tr('logout')}</Text>
+            <Text style={[S.logoutMsg,   { color: C.textSub }]}>{tr('logoutConfirm')}</Text>
+            <View style={S.logoutBtnRow}>
+              <TouchableOpacity style={[S.cancelBtn, { borderColor: C.border }]}
+                onPress={() => setShowLogoutModal(false)}>
+                <Text style={[S.cancelText, { color: C.textSub }]}>{tr('no')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={S.confirmLogoutBtn} onPress={doLogout}>
+                <Ionicons name="log-out-outline" size={16} color="#fff" />
+                <Text style={S.confirmLogoutText}>{tr('yes')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ══ Remove Officer Confirm Modal ══════════════════════════════ */}
+      <Modal visible={!!removeTarget} transparent animationType="fade"
+        onRequestClose={() => setRemoveTarget(null)}>
+        <Pressable style={S.modalBackdrop} onPress={() => setRemoveTarget(null)} />
+        <View style={S.modalCenter}>
+          <View style={[S.logoutCard, { backgroundColor: C.card }]}>
+            <View style={[S.logoutIconBox, { backgroundColor: 'rgba(239,68,68,0.1)' }]}>
+              <Ionicons name="trash-outline" size={32} color="#EF4444" />
+            </View>
+            <Text style={[S.logoutTitle, { color: C.text }]}>Remove Officer</Text>
+            <Text style={[S.logoutMsg,   { color: C.textSub }]}>
+              Remove <Text style={{ fontWeight: '800', color: C.text }}>{removeTarget?.fullName}</Text> from the system?
+            </Text>
+            <View style={S.logoutBtnRow}>
+              <TouchableOpacity style={[S.cancelBtn, { borderColor: C.border }]}
+                onPress={() => setRemoveTarget(null)}>
+                <Text style={[S.cancelText, { color: C.textSub }]}>{tr('no')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={S.confirmLogoutBtn} onPress={confirmRemove}>
+                <Ionicons name="trash-outline" size={16} color="#fff" />
+                <Text style={S.confirmLogoutText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ══ Header ════════════════════════════════════════════════════ */}
+      <View style={[S.header, { backgroundColor: C.headerBg }]}>
+        <TouchableOpacity onPress={openSidebar} style={S.menuBtn}>
+          <Ionicons name="menu" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={S.headerTitle}>{tr('adminPanel')}</Text>
+        <View style={{ width: 38 }} />
+      </View>
+
+      {/* ══ Officers List ════════════════════════════════════════════ */}
       {loading
-        ? <ActivityIndicator style={{flex:1}} color={SprintColors.green} size="large" />
-        : <FlatList
+        ? <ActivityIndicator style={{ flex:1 }} color={SprintColors.green} size="large" />
+        : (
+          <FlatList
             data={officers}
             keyExtractor={o => String(o.id)}
-            contentContainerStyle={{padding:16, paddingBottom:100}}
+            contentContainerStyle={{ padding:16, paddingBottom:100 }}
             ListEmptyComponent={
-              <View style={styles.emptyWrap}>
+              <View style={S.emptyWrap}>
                 <MaterialCommunityIcons name="account-off-outline" size={48} color={C.textMuted}/>
-                <Text style={[styles.emptyText,{color:C.textMuted}]}>{tr('noOfficers')}</Text>
+                <Text style={[S.emptyText, { color: C.textMuted }]}>{tr('noOfficers')}</Text>
               </View>
             }
-            renderItem={({item:o}) => (
-              <View style={[styles.card, {backgroundColor: C.card}]}>
-                <View style={{flex:1}}>
-                  <View style={{flexDirection:'row', alignItems:'center', gap:8, marginBottom:4}}>
-                    <View style={[styles.roleChip,{backgroundColor:ROLE_COLORS[o.role]??SprintColors.green}]}>
-                      <Text style={styles.roleText}>
-                        {o.role==='FIELD_OFFICER' ? tr('fieldOfficer') : tr('supervisor')}
+            renderItem={({ item: o }) => (
+              <View style={[S.card, { backgroundColor: C.card }]}>
+                <View style={{ flex:1 }}>
+                  <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
+                    <View style={[S.roleChip, { backgroundColor: ROLE_COLORS[o.role] ?? SprintColors.green }]}>
+                      <Text style={S.roleText}>
+                        {o.role === 'FIELD_OFFICER' ? tr('fieldOfficer') : tr('supervisor')}
                       </Text>
                     </View>
                   </View>
-                  <Text style={[styles.name,{color:C.text}]}>{o.fullName}</Text>
-                  <Text style={[styles.meta,{color:C.textSub}]}>ID: {o.employeeId}</Text>
+                  <Text style={[S.name, { color: C.text }]}>{o.fullName}</Text>
+                  <Text style={[S.meta, { color: C.textSub }]}>ID: {o.employeeId}</Text>
                   {o.locationName
-                    ? <Text style={[styles.meta,{color:C.textSub}]}>
-                        <Ionicons name="location-outline" size={12}/> {o.locationName}
+                    ? <Text style={[S.meta, { color: C.textSub }]}>
+                        <Ionicons name="location-outline" size={12} /> {o.locationName}
                       </Text>
-                    : <Text style={[styles.meta,{color:C.textMuted}]}>Unassigned</Text>}
+                    : <Text style={[S.meta, { color: C.textMuted }]}>Unassigned</Text>
+                  }
                 </View>
-                <View style={styles.actions}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={()=>setShowMove(o)}>
+                <View style={S.actions}>
+                  <TouchableOpacity style={S.actionBtn} onPress={() => setShowMove(o)}>
                     <Ionicons name="swap-horizontal-outline" size={18} color={SprintColors.green}/>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn,{backgroundColor:'rgba(239,68,68,0.08)'}]}
-                    onPress={()=>setRemoveTarget(o)}>
+                  <TouchableOpacity style={[S.actionBtn, { backgroundColor:'rgba(239,68,68,0.08)' }]}
+                    onPress={() => setRemoveTarget(o)}>
                     <Ionicons name="trash-outline" size={18} color="#EF4444"/>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
           />
+        )
       }
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={()=>setShowAdd(true)}>
+      <TouchableOpacity style={S.fab} onPress={() => setShowAdd(true)}>
         <Ionicons name="person-add-outline" size={22} color="#fff"/>
-        <Text style={styles.fabText}>{tr('addOfficer')}</Text>
+        <Text style={S.fabText}>{tr('addOfficer')}</Text>
       </TouchableOpacity>
 
-      {/* ── Add Officer Modal ──────────────────────────────────────────── */}
-      <Modal visible={showAdd} transparent animationType="slide" onRequestClose={()=>setShowAdd(false)}>
-        <Pressable style={styles.backdrop} onPress={()=>setShowAdd(false)}/>
-        <View style={[styles.sheet, {backgroundColor: C.card}]}>
-          <Text style={[styles.sheetTitle,{color:C.text}]}>{tr('addOfficer')}</Text>
+      {/* ══ Add Officer Modal ════════════════════════════════════════ */}
+      <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
+        <Pressable style={S.backdrop} onPress={() => setShowAdd(false)}/>
+        <View style={[S.sheet, { backgroundColor: C.card }]}>
+          <Text style={[S.sheetTitle, { color: C.text }]}>{tr('addOfficer')}</Text>
 
-          <Text style={[styles.inputLabel,{color:C.textSub}]}>{tr('officerName')}</Text>
-          <TextInput style={[styles.input,{color:C.text,borderColor:C.border,backgroundColor:C.bg}]}
+          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('officerName')}</Text>
+          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
             value={newName} onChangeText={setNewName} placeholder="e.g. Juma Ally"
-            placeholderTextColor={C.textMuted}/>
+            autoCapitalize="words" placeholderTextColor={C.textMuted}/>
 
-          <Text style={[styles.inputLabel,{color:C.textSub}]}>{tr('employeeIdLabel')}</Text>
-          <TextInput style={[styles.input,{color:C.text,borderColor:C.border,backgroundColor:C.bg}]}
+          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('employeeIdLabel')}</Text>
+          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
             value={newEmpId} onChangeText={setNewEmpId} placeholder="e.g. TZ-1234"
             autoCapitalize="characters" placeholderTextColor={C.textMuted}/>
 
-          <Text style={[styles.inputLabel,{color:C.textSub}]}>{tr('selectLocation')}</Text>
-          <View style={styles.locGrid}>
+          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('selectLocation')}</Text>
+          <View style={S.locGrid}>
             {locations.map(loc => (
               <TouchableOpacity key={loc.id}
-                style={[styles.locChip, newLocId===loc.id && styles.locChipActive]}
-                onPress={()=>setNewLocId(loc.id)}>
-                <Text style={[styles.locChipText, newLocId===loc.id && {color:'#fff'}]}>
+                style={[S.locChip, newLocId === loc.id && S.locChipActive]}
+                onPress={() => setNewLocId(loc.id)}>
+                <Text style={[S.locChipText, newLocId === loc.id && { color:'#fff' }]}>
                   {loc.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <TouchableOpacity style={[styles.saveBtn, saving && {opacity:0.6}]}
+          <TouchableOpacity style={[S.saveBtn, saving && { opacity:0.6 }]}
             onPress={handleAdd} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff"/> :
-              <Text style={styles.saveBtnText}>{tr('save')}</Text>}
+              <Text style={S.saveBtnText}>{tr('save')}</Text>}
           </TouchableOpacity>
         </View>
       </Modal>
 
-      {/* ── Move Location Modal ────────────────────────────────────────── */}
-      <Modal visible={!!showMove} transparent animationType="slide" onRequestClose={()=>setShowMove(null)}>
-        <Pressable style={styles.backdrop} onPress={()=>setShowMove(null)}/>
-        <View style={[styles.sheet,{backgroundColor:C.card}]}>
-          <Text style={[styles.sheetTitle,{color:C.text}]}>{tr('moveLocation')}: {showMove?.fullName}</Text>
-          <View style={styles.locGrid}>
+      {/* ══ Move Location Modal ═══════════════════════════════════════ */}
+      <Modal visible={!!showMove} transparent animationType="slide" onRequestClose={() => setShowMove(null)}>
+        <Pressable style={S.backdrop} onPress={() => setShowMove(null)}/>
+        <View style={[S.sheet, { backgroundColor: C.card }]}>
+          <Text style={[S.sheetTitle, { color: C.text }]}>
+            {tr('moveLocation')}: {showMove?.fullName}
+          </Text>
+          <View style={S.locGrid}>
             {locations.map(loc => (
-              <TouchableOpacity key={loc.id} style={styles.locChip} onPress={()=>handleMove(loc.id)}>
-                <Text style={styles.locChipText}>{loc.name}</Text>
+              <TouchableOpacity key={loc.id} style={S.locChip} onPress={() => handleMove(loc.id)}>
+                <Text style={S.locChipText}>{loc.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
       </Modal>
-
-      {/* ── Remove Officer Confirm ────────────────────────────────────── */}
-      <ConfirmModal
-        visible={!!removeTarget}
-        title={`Remove ${removeTarget?.fullName ?? ''}?`}
-        message="This will permanently remove the officer from the system. Their bills will be retained."
-        confirmLabel="Remove Officer"
-        cancelLabel="Cancel"
-        variant="danger"
-        onConfirm={confirmRemove}
-        onCancel={() => setRemoveTarget(null)}
-      />
-
-      {/* ── Generic Alert Modal ───────────────────────────────────────── */}
-      {confirmAlert && (
-        <ConfirmModal
-          visible
-          title={confirmAlert.title}
-          message={confirmAlert.message}
-          variant={confirmAlert.variant}
-          confirmLabel="OK"
-          cancelLabel=""
-          onConfirm={confirmAlert.onOk}
-          onCancel={confirmAlert.onOk}
-        />
-      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root:{ flex:1 },
-  header:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
-    paddingHorizontal:16, paddingVertical:14, backgroundColor:'#0D1117' },
-  headerTitle:{ fontSize:18, fontWeight:'800' },
-  menuBtn:{ width:36, height:36, borderRadius:10, alignItems:'center', justifyContent:'center',
-    backgroundColor:'rgba(255,255,255,0.1)' },
-  logoutBtn:{ padding:6 },
-  // Sidebar
-  sidebarOverlay:{ ...StyleSheet.absoluteFillObject, backgroundColor:'rgba(0,0,0,0.5)' },
-  sidebarPanel:{ position:'absolute', left:0, top:0, bottom:0, width:280,
-    paddingTop:56, paddingHorizontal:0, zIndex:99 },
-  sbTop:{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:20, marginBottom:20 },
+  overlay:{ ...StyleSheet.absoluteFillObject, backgroundColor:'rgba(0,0,0,0.5)' },
+  sidebar:{ position:'absolute', left:0, top:0, bottom:0, width: W * 0.75,
+    paddingTop:56, zIndex:99 },
+  sbHead:{ flexDirection:'row', alignItems:'center', gap:12,
+    paddingHorizontal:20, marginBottom:16 },
+  sbIconWrap:{ width:42, height:42, borderRadius:12,
+    backgroundColor:'rgba(252,209,22,0.12)', alignItems:'center', justifyContent:'center' },
   sbTitle:{ flex:1, fontSize:17, fontWeight:'800', color:'#F9FAFB' },
-  sbClose:{ padding:4 },
-  sbDivider:{ height:1, backgroundColor:'rgba(255,255,255,0.08)', marginHorizontal:20, marginVertical:8 },
-  sbItem:{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:20,
-    paddingVertical:14 },
-  sbItemIcon:{ width:38, height:38, borderRadius:10, alignItems:'center', justifyContent:'center',
-    backgroundColor:'rgba(30,181,58,0.12)' },
-  sbItemLabel:{ fontSize:15, fontWeight:'700', color:'#F9FAFB' },
-  sbItemSub:{ fontSize:11, color:'#6B7280', marginTop:1 },
-  sbLogout:{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:20,
-    paddingVertical:14 },
-  sbLogoutText:{ color:'#EF4444', fontWeight:'700', fontSize:15 },
-  sbMenuRow:{ flexDirection:'row', alignItems:'center', gap:10,
+  sbDivider:{ height:1, backgroundColor:'rgba(255,255,255,0.08)',
+    marginHorizontal:20, marginVertical:6 },
+  sbNavItem:{ flexDirection:'row', alignItems:'center', gap:12,
+    paddingHorizontal:20, paddingVertical:13 },
+  sbNavIcon:{ width:38, height:38, borderRadius:10,
+    backgroundColor:'rgba(30,181,58,0.12)', alignItems:'center', justifyContent:'center' },
+  sbNavLabel:{ fontSize:14, fontWeight:'700', color:'#F9FAFB' },
+  sbNavSub:{ fontSize:11, color:'#6B7280', marginTop:1 },
+  sbRow:{ flexDirection:'row', alignItems:'center', gap:12,
     paddingHorizontal:20, paddingVertical:12 },
-  sbMenuLabel:{ flex:1, fontSize:14, color:'#D1D5DB', fontWeight:'600' },
-  sbDropdown:{ marginHorizontal:20, borderRadius:10, overflow:'hidden', marginBottom:4,
-    backgroundColor:'rgba(255,255,255,0.05)' },
-  sbDropdownItem:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
-    paddingHorizontal:14, paddingVertical:11 },
-  sbDropdownText:{ fontSize:13, fontWeight:'600' },
+  sbRowLabel:{ flex:1, fontSize:14, color:'#D1D5DB', fontWeight:'600' },
+  sbRowRight:{ flexDirection:'row', alignItems:'center', gap:6 },
+  sbRowValue:{ fontSize:12, color:'#9CA3AF' },
+  sbDropdown:{ marginHorizontal:20, borderRadius:10, overflow:'hidden',
+    backgroundColor:'rgba(255,255,255,0.05)', marginBottom:4 },
+  sbDropItem:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
+    paddingHorizontal:16, paddingVertical:12 },
+  sbDropItemActive:{ backgroundColor:'rgba(30,181,58,0.12)' },
+  sbDropText:{ fontSize:13, fontWeight:'600', color:'#D1D5DB' },
+  sbLogout:{ flexDirection:'row', alignItems:'center', gap:12,
+    paddingHorizontal:20, paddingVertical:14, marginTop:4 },
+  sbLogoutIcon:{ width:36, height:36, borderRadius:10,
+    backgroundColor:'rgba(239,68,68,0.12)', alignItems:'center', justifyContent:'center' },
+  sbLogoutText:{ color:'#EF4444', fontWeight:'700', fontSize:15 },
+  // Modals
+  modalBackdrop:{ ...StyleSheet.absoluteFillObject, backgroundColor:'rgba(0,0,0,0.55)' },
+  modalCenter:{ flex:1, alignItems:'center', justifyContent:'center', padding:32 },
+  logoutCard:{ width:'100%', borderRadius:20, padding:24, alignItems:'center',
+    shadowColor:'#000', shadowOffset:{width:0,height:8},
+    shadowOpacity:0.2, shadowRadius:20, elevation:12 },
+  logoutIconBox:{ width:64, height:64, borderRadius:18,
+    backgroundColor:'rgba(239,68,68,0.1)', alignItems:'center',
+    justifyContent:'center', marginBottom:14 },
+  logoutTitle:{ fontSize:20, fontWeight:'900', marginBottom:8 },
+  logoutMsg:{ fontSize:14, textAlign:'center', lineHeight:21, marginBottom:24 },
+  logoutBtnRow:{ flexDirection:'row', gap:12, width:'100%' },
+  cancelBtn:{ flex:1, height:48, borderRadius:12, borderWidth:1.5,
+    alignItems:'center', justifyContent:'center' },
+  cancelText:{ fontWeight:'600', fontSize:14 },
+  confirmLogoutBtn:{ flex:1, height:48, borderRadius:12, backgroundColor:'#EF4444',
+    flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8 },
+  confirmLogoutText:{ color:'#fff', fontWeight:'800', fontSize:14 },
+  // Header (NO logout icon)
+  header:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
+    paddingHorizontal:16, paddingVertical:14 },
+  menuBtn:{ width:38, height:38, borderRadius:10, alignItems:'center',
+    justifyContent:'center', backgroundColor:'rgba(255,255,255,0.1)' },
+  headerTitle:{ fontSize:18, fontWeight:'800', color:'#fff' },
+  // List
   emptyWrap:{ alignItems:'center', marginTop:60, gap:12 },
   emptyText:{ fontSize:15 },
   card:{ borderRadius:14, padding:16, marginBottom:10, flexDirection:'row',
@@ -344,7 +476,7 @@ const styles = StyleSheet.create({
   fab:{ position:'absolute', bottom:24, right:20, flexDirection:'row',
     alignItems:'center', gap:8, backgroundColor: SprintColors.green,
     paddingHorizontal:18, paddingVertical:14, borderRadius:30,
-    shadowColor:SprintColors.green, shadowOffset:{width:0,height:4},
+    shadowColor: SprintColors.green, shadowOffset:{width:0,height:4},
     shadowOpacity:0.4, shadowRadius:8, elevation:8 },
   fabText:{ color:'#fff', fontWeight:'800', fontSize:14 },
   backdrop:{ flex:1, backgroundColor:'rgba(0,0,0,0.5)' },

@@ -53,6 +53,8 @@ export default function VehiclesScreen() {
   const [loading,  setLoading]      = useState(true);
   const [showAdd,  setShowAdd]      = useState(false);
   const [saving,   setSaving]       = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastRegisteredPlate, setLastRegisteredPlate] = useState('');
 
   // Form fields
   const [fOwnerName,  setFOwnerName]  = useState('');
@@ -93,9 +95,10 @@ export default function VehiclesScreen() {
         category: fCategory,
       });
       setShowAdd(false);
+      setLastRegisteredPlate(fPlate.trim().toUpperCase());
       resetForm();
       load();
-      Alert.alert('✓ Registered', 'Vehicle registered and SMS sent to owner.');
+      setShowSuccessModal(true);
     } catch (e: any) {
       const detail = e?.response?.data?.detail ?? 'Registration failed.';
       Alert.alert('Error', detail);
@@ -248,9 +251,62 @@ export default function VehiclesScreen() {
           </TouchableOpacity>
         </View>
       </Modal>
+      {/* ══ Registration Success Modal ════════════════════════════ */}
+      <Modal visible={showSuccessModal} transparent animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}>
+        <View style={successStyles.backdrop}>
+          <View style={[successStyles.card, { backgroundColor: C.card }]}>
+            {/* Green checkmark circle */}
+            <View style={successStyles.iconWrap}>
+              <Ionicons name="checkmark-circle" size={56} color="#1EB53A" />
+            </View>
+            <Text style={[successStyles.title, { color: '#1EB53A' }]}>
+              Vehicle Registered!
+            </Text>
+            <View style={successStyles.plateRow}>
+              <Text style={successStyles.plateBig}>{lastRegisteredPlate}</Text>
+            </View>
+            <Text style={[successStyles.sub, { color: C.textSub }]}>
+              Successfully added to the ParkiPay vehicle registry.
+            </Text>
+            <View style={successStyles.noteRow}>
+              <Ionicons name="information-circle-outline" size={16} color="#1EB53A" />
+              <Text style={[successStyles.noteText, { color: C.textSub }]}>
+                The vehicle owner will receive an SMS when a parking bill is generated.
+              </Text>
+            </View>
+            <TouchableOpacity style={successStyles.doneBtn}
+              onPress={() => setShowSuccessModal(false)}>
+              <Ionicons name="checkmark" size={18} color="#fff" />
+              <Text style={successStyles.doneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const successStyles = StyleSheet.create({
+  backdrop:{ flex:1, backgroundColor:'rgba(0,0,0,0.55)',
+    alignItems:'center', justifyContent:'center', padding:28 },
+  card:{ width:'100%', borderRadius:24, padding:28, alignItems:'center',
+    shadowColor:'#000', shadowOffset:{width:0,height:8},
+    shadowOpacity:0.18, shadowRadius:20, elevation:12 },
+  iconWrap:{ marginBottom:12 },
+  title:{ fontSize:22, fontWeight:'900', marginBottom:12 },
+  plateRow:{ paddingHorizontal:20, paddingVertical:10, borderRadius:10,
+    borderWidth:2, borderColor:'#1A1A1A', backgroundColor:'#fff', marginBottom:14 },
+  plateBig:{ fontSize:24, fontWeight:'900', letterSpacing:4, color:'#1A1A1A' },
+  sub:{ fontSize:14, textAlign:'center', lineHeight:21, marginBottom:14 },
+  noteRow:{ flexDirection:'row', gap:8, padding:12, borderRadius:10,
+    backgroundColor:'rgba(30,181,58,0.08)', borderLeftWidth:3,
+    borderLeftColor:'#1EB53A', marginBottom:20, alignItems:'flex-start', width:'100%' },
+  noteText:{ flex:1, fontSize:12, lineHeight:18 },
+  doneBtn:{ width:'100%', height:50, backgroundColor:'#1EB53A', borderRadius:12,
+    flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8 },
+  doneBtnText:{ color:'#fff', fontSize:15, fontWeight:'900' },
+});
 
 function makeStyles(C: ReturnType<typeof palette>) {
   return StyleSheet.create({
