@@ -32,7 +32,7 @@ function getLocalDevUrl(): string {
 
 // ── Production URL ────────────────────────────────────────────────────────────
 
-const PRODUCTION_API_URL = 'https://parkipay-api.onrender.com';
+const PRODUCTION_API_URL = 'https://paypark-backend-6kc4.onrender.com';
 
 // ── Resolved base URL ─────────────────────────────────────────────────────────
 
