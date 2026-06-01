@@ -79,10 +79,12 @@ const cfg = {
 
   // ── Billing ───────────────────────────────────────────
   billing: {
-    validityHours: parseInt(
-      process.env.CONTROL_NUMBER_VALIDITY_HOURS || '5',
-      10
-    ),
+    // How long (hours) a bill is valid after generation (shown to officer)
+    validityHours: parseInt(process.env.CONTROL_NUMBER_VALIDITY_HOURS || '5', 10),
+    // Duplicate cooldown: how many MINUTES must pass before another bill
+    // can be issued for the SAME plate at the SAME location.
+    // Default 1 min for easy demo; set higher in production.
+    cooldownMinutes: parseInt(process.env.BILLING_COOLDOWN_MINUTES || '1', 10),
   },
 
   // ── Redis ─────────────────────────────────────────────

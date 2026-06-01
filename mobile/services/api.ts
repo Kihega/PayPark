@@ -150,8 +150,9 @@ export const adminService = {
 
 // ── Vehicle lookup service ────────────────────────────────────────────────────
 export const vehicleService = {
-  lookup:    (plate: string) => apiClient.get(`/api/vehicles/lookup/?plate=${encodeURIComponent(plate)}`),
-  locations: ()              => apiClient.get('/api/vehicles/locations/'),
+  lookup:    (plate: string)                    => apiClient.get(`/api/vehicles/lookup/?plate=${encodeURIComponent(plate)}`),
+  locations: ()                                 => apiClient.get('/api/vehicles/locations/'),
+  ocrPlate:  (image: string, mimeType?: string) => apiClient.post('/api/vehicles/ocr-plate/', { image, mimeType: mimeType ?? 'image/jpeg' }),
 };
 
 // ── Vehicle registry management (admin) ──────────────────────────────────────
@@ -167,7 +168,7 @@ export const billingService = {
     apiClient.post('/api/billing/generate/', { plate_number, location_id }),
   history:    () => apiClient.get('/api/billing/history/'),
   stats:      () => apiClient.get('/api/billing/stats/'),
-  activeBill: (plate: string) =>
-    apiClient.get(`/api/billing/active-bill/?plate=${encodeURIComponent(plate)}`),
+  activeBill: (plate: string, locationId?: number) =>
+    apiClient.get(`/api/billing/active-bill/?plate=${encodeURIComponent(plate)}${locationId ? `&location_id=${locationId}` : ''}`),
   status:     (cn: string) => apiClient.get(`/api/billing/${cn}/status/`),
 };

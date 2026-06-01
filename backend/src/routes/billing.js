@@ -40,22 +40,28 @@ router.post('/generate/', async (req, res, next) => {
     const { plate_number, location_id } = parsed.data;
     const plate = plate_number.trim().toUpperCase().replace(/\s/g, '');
 
-    // ── 1. Duplicate check (Redis-first) ──────────────────────────────────
-    const billCacheKey = `active_bill:${plate}`;
+    // ── 1. Duplicate check (Redis-first, per plate+location, 1-min cooldown)
+    const billCacheKey = `active_bill:${plate}:${location_id}`;
     let existing = await redis.cacheGet(billCacheKey);
     if (!existing) {
-      existing = await getActiveBillForPlate(plate);
+      existing = await getActiveBillForPlate(plate, location_id);
     }
 
     if (existing) {
-      await redis.cacheSet(billCacheKey, existing, ACTIVE_BILL_TTL);
+      // TTL matches cooldown window so cache expires exactly when a new bill is allowed
+      const cooldownSecs = (cfg.billing.cooldownMinutes ?? 1) * 60;
+      await redis.cacheSet(billCacheKey, existing, cooldownSecs);
       await logAction(req.officer, logAction.ACTIONS.BILL_DUPLICATE_BLOCKED, {
         plateNumber: plate, controlNumber: existing.controlNumber,
         result: 'duplicate_blocked', req,
       });
+      const cooldownMs   = (cfg.billing.cooldownMinutes ?? 1) * 60 * 1000;
+      const allowedAfter = new Date(new Date(existing.generatedAt).getTime() + cooldownMs);
       return res.status(409).json({
         error: 'duplicate_bill',
-        detail: 'This vehicle already has an active parking bill.',
+        detail: `This vehicle was already billed at this location. New bill allowed after ${cfg.billing.cooldownMinutes} minute(s).`,
+        cooldown_minutes: cfg.billing.cooldownMinutes ?? 1,
+        allowed_after:    allowedAfter.toISOString(),
         existing_bill: {
           control_number: existing.controlNumber,
           expires_at:     existing.expiresAt,
@@ -175,18 +181,22 @@ router.get('/stats/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /api/billing/active-bill/?plate= ─────────────────────────────────────
+// ── GET /api/billing/active-bill/?plate=&location_id= ────────────────────
 router.get('/active-bill/', async (req, res, next) => {
   try {
-    const raw   = req.query.plate || '';
-    const plate = raw.trim().toUpperCase().replace(/\s/g, '');
+    const raw        = req.query.plate || '';
+    const plate      = raw.trim().toUpperCase().replace(/\s/g, '');
+    const locationId = req.query.location_id ? parseInt(req.query.location_id, 10) : null;
     if (!plate) return res.status(400).json({ error: 'validation_error', detail: '`plate` is required.' });
 
-    const cacheKey = `active_bill:${plate}`;
+    const cacheKey = locationId ? `active_bill:${plate}:${locationId}` : `active_bill:${plate}`;
     let bill = await redis.cacheGet(cacheKey);
     if (!bill) {
-      bill = await getActiveBillForPlate(plate);
-      if (bill) await redis.cacheSet(cacheKey, bill, ACTIVE_BILL_TTL);
+      bill = await getActiveBillForPlate(plate, locationId);
+      if (bill) {
+        const cooldownSecs = (cfg.billing?.cooldownMinutes ?? 1) * 60;
+        await redis.cacheSet(cacheKey, bill, cooldownSecs);
+      }
     }
 
     if (!bill) return res.json({ active: false, bill: null });

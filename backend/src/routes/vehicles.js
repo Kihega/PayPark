@@ -63,4 +63,69 @@ router.get('/locations/', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
+
+
+// ── POST /api/vehicles/ocr-plate/ ────────────────────────────────────────────
+// Accepts a base64 image → runs Tesseract OCR → extracts TZ plate number
+// Body: { image: "<base64 string>", mimeType: "image/jpeg" }
+router.post('/ocr-plate/', async (req, res, next) => {
+  try {
+    const { image, mimeType = 'image/jpeg' } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: 'validation_error', detail: '`image` (base64) is required.' });
+    }
+
+    // Write base64 to temp file
+    const os   = require('os');
+    const path = require('path');
+    const fs   = require('fs');
+    const tmpFile = path.join(os.tmpdir(), `plate_${Date.now()}.jpg`);
+
+    const imgBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    fs.writeFileSync(tmpFile, imgBuffer);
+
+    let extractedPlate = null;
+    let rawText        = '';
+
+    try {
+      const Tesseract = require('tesseract.js');
+      const { data: { text } } = await Tesseract.recognize(tmpFile, 'eng', {
+        logger: () => {},  // silence progress logs
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+      });
+      rawText = text;
+      console.log('[OCR] Raw text:', text.replace(/\n/g, ' ').trim());
+
+      // Extract Tanzania plate pattern: T + 3 digits + 3 letters  (e.g. T882DXZ)
+      // Also handle with spaces: T 882 DXZ
+      const plateRegex = /\bT\s*(\d{3})\s*([A-Z]{3})\b/i;
+      const match = text.replace(/\s+/g, ' ').toUpperCase().match(plateRegex);
+      if (match) {
+        extractedPlate = `T${match[1]}${match[2]}`;
+        console.log('[OCR] Extracted plate:', extractedPlate);
+      }
+    } finally {
+      // Clean up temp file
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+
+    if (extractedPlate) {
+      return res.json({
+        success:  true,
+        plate:    extractedPlate,
+        rawText:  rawText.trim(),
+      });
+    }
+
+    return res.json({
+      success:  false,
+      plate:    null,
+      rawText:  rawText.trim(),
+      detail:   'Could not extract a valid Tanzania plate number from the image. Try again with better lighting.',
+    });
+  } catch (err) {
+    console.error('[OCR] Error:', err.message);
+    next(err);
+  }
+});
 module.exports = router;

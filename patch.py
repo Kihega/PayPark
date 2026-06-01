@@ -1,4 +1,308 @@
+#!/usr/bin/env python3
+"""
+ParkiPay — Final Patch
+══════════════════════
+1. Bill duplicate logic: 1-minute cooldown per plate+location (was 5 hrs)
+2. Camera OCR: tap camera → capture plate photo → auto-extract plate text
+   • Mobile: expo-camera captures image → base64 → POST to backend
+   • Backend: Tesseract.js OCR → regex extracts TZ plate → returns plate string
+"""
+import sys, json
+from pathlib import Path
+
+def find_root(arg=None):
+    if arg: return Path(arg).resolve()
+    for base in [Path.cwd(), Path('/home/kali'), Path('/home/kali/PayPark')]:
+        for suf in ['', 'PayPark-main']:
+            p = base / suf
+            if (p / 'backend' / 'prisma' / 'schema.prisma').exists(): return p
+    sys.exit('Pass path: python3 paypark_final.py /home/kali/PayPark')
+
+def write(path: Path, content: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding='utf-8')
+    print(f'  ✅ Wrote   {path.name}')
+
+def patch(path: Path, old: str, new: str, label=''):
+    if not path.exists():
+        print(f'  ⚠  Missing {path.name}'); return False
+    txt = path.read_text(encoding='utf-8')
+    if old not in txt:
+        print(f'  ⚠  Pattern not found in {path.name}  [{label}]'); return False
+    path.write_text(txt.replace(old, new, 1), encoding='utf-8')
+    print(f'  ✅ Patched {path.name}  [{label}]')
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1a. CONFIG — replace validityHours with billingCooldownMinutes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CONFIG_BILLING_OLD = r'''  billing: {
+    validityHours: parseInt(
+      process.env.CONTROL_NUMBER_VALIDITY_HOURS || '5',
+      10
+    ),
+  },'''
+
+CONFIG_BILLING_NEW = r'''  billing: {
+    // How long (hours) a bill is valid after generation (shown to officer)
+    validityHours: parseInt(process.env.CONTROL_NUMBER_VALIDITY_HOURS || '5', 10),
+    // Duplicate cooldown: how many MINUTES must pass before another bill
+    // can be issued for the SAME plate at the SAME location.
+    // Default 1 min for easy demo; set higher in production.
+    cooldownMinutes: parseInt(process.env.BILLING_COOLDOWN_MINUTES || '1', 10),
+  },'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1b. controlNumber.js — cooldown check uses plate + locationId + 1 min window
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CONTROL_NUMBER_JS = r'''// ParkiPay — Control number generation + duplicate prevention
+// Format: 11 pure digits  e.g. 20260522743  (YYYYMMDD + 3 random digits)
+const prisma = require('./prisma');
+const cfg    = require('../config');
+
+function generateControlNumber() {
+  const d    = new Date();
+  const yyyy = String(d.getFullYear());
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const rand = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+  return `${yyyy}${mm}${dd}${rand}`.replace(/\D/g, '').slice(0, 11).padStart(11, '0');
+}
+
 /**
+ * Check if a duplicate bill should be blocked.
+ *
+ * A bill is considered a duplicate when BOTH conditions are true:
+ *   1. Same plateNumber  (case-insensitive)
+ *   2. Same locationId
+ *   3. The bill was generated within the last BILLING_COOLDOWN_MINUTES minutes
+ *
+ * This allows the SAME vehicle to be billed at DIFFERENT locations without
+ * triggering a duplicate, and allows re-billing after the cooldown.
+ */
+async function getActiveBillForPlate(plateNumber, locationId = null) {
+  const cooldownMs  = (cfg.billing.cooldownMinutes ?? 1) * 60 * 1000;
+  const cutoffTime  = new Date(Date.now() - cooldownMs);
+
+  const where = {
+    plateNumber: { equals: plateNumber.trim().toUpperCase(), mode: 'insensitive' },
+    status:      'ACTIVE',
+    generatedAt: { gte: cutoffTime },   // within cooldown window
+  };
+
+  // If locationId provided, also match location (same plate, different location = OK)
+  if (locationId) {
+    where.locationId = locationId;
+  }
+
+  return prisma.controlNumber.findFirst({
+    where,
+    include: { officer: true, location: true, vehicle: true },
+    orderBy: { generatedAt: 'desc' },
+  });
+}
+
+module.exports = { generateControlNumber, getActiveBillForPlate };
+'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1c. billing.js — pass location_id to duplicate check
+# ═══════════════════════════════════════════════════════════════════════════════
+
+BILLING_DUP_OLD = r'''    // ── 1. Duplicate check (Redis-first) ──────────────────────────────────
+    const billCacheKey = `active_bill:${plate}`;
+    let existing = await redis.cacheGet(billCacheKey);
+    if (!existing) {
+      existing = await getActiveBillForPlate(plate);
+    }'''
+
+BILLING_DUP_NEW = r'''    // ── 1. Duplicate check (Redis-first, per plate+location, 1-min cooldown)
+    const billCacheKey = `active_bill:${plate}:${location_id}`;
+    let existing = await redis.cacheGet(billCacheKey);
+    if (!existing) {
+      existing = await getActiveBillForPlate(plate, location_id);
+    }'''
+
+BILLING_DUP_CACHE_OLD = r'''      await redis.cacheSet(billCacheKey, existing, ACTIVE_BILL_TTL);
+      await logAction(req.officer, logAction.ACTIONS.BILL_DUPLICATE_BLOCKED, {'''
+
+BILLING_DUP_CACHE_NEW = r'''      // TTL matches cooldown window so cache expires exactly when a new bill is allowed
+      const cooldownSecs = (cfg.billing.cooldownMinutes ?? 1) * 60;
+      await redis.cacheSet(billCacheKey, existing, cooldownSecs);
+      await logAction(req.officer, logAction.ACTIONS.BILL_DUPLICATE_BLOCKED, {'''
+
+# Also update the duplicate response to show cooldown info
+BILLING_DUP_RESP_OLD = r'''      return res.status(409).json({
+        error: 'duplicate_bill',
+        detail: 'This vehicle already has an active parking bill.',
+        existing_bill: {
+          control_number: existing.controlNumber,
+          expires_at:     existing.expiresAt,
+          issued_by:      existing.officer?.fullName ?? null,
+          officer_id:     existing.officer?.employeeId ?? null,
+          location:       existing.location?.name ?? null,
+          amount_due:     existing.amountDue,
+          generated_at:   existing.generatedAt,
+        },
+      });'''
+
+BILLING_DUP_RESP_NEW = r'''      const cooldownMs   = (cfg.billing.cooldownMinutes ?? 1) * 60 * 1000;
+      const allowedAfter = new Date(new Date(existing.generatedAt).getTime() + cooldownMs);
+      return res.status(409).json({
+        error: 'duplicate_bill',
+        detail: `This vehicle was already billed at this location. New bill allowed after ${cfg.billing.cooldownMinutes} minute(s).`,
+        cooldown_minutes: cfg.billing.cooldownMinutes ?? 1,
+        allowed_after:    allowedAfter.toISOString(),
+        existing_bill: {
+          control_number: existing.controlNumber,
+          expires_at:     existing.expiresAt,
+          issued_by:      existing.officer?.fullName ?? null,
+          officer_id:     existing.officer?.employeeId ?? null,
+          location:       existing.location?.name ?? null,
+          amount_due:     existing.amountDue,
+          generated_at:   existing.generatedAt,
+        },
+      });'''
+
+# Update active-bill endpoint to also use location_id
+BILLING_ACTIVEBILL_OLD = r'''// ── GET /api/billing/active-bill/?plate= ─────────────────────────────────────
+router.get('/active-bill/', async (req, res, next) => {
+  try {
+    const raw   = req.query.plate || '';
+    const plate = raw.trim().toUpperCase().replace(/\s/g, '');
+    if (!plate) return res.status(400).json({ error: 'validation_error', detail: '`plate` is required.' });
+
+    const cacheKey = `active_bill:${plate}`;
+    let bill = await redis.cacheGet(cacheKey);
+    if (!bill) {
+      bill = await getActiveBillForPlate(plate);
+      if (bill) await redis.cacheSet(cacheKey, bill, ACTIVE_BILL_TTL);
+    }'''
+
+BILLING_ACTIVEBILL_NEW = r'''// ── GET /api/billing/active-bill/?plate=&location_id= ────────────────────
+router.get('/active-bill/', async (req, res, next) => {
+  try {
+    const raw        = req.query.plate || '';
+    const plate      = raw.trim().toUpperCase().replace(/\s/g, '');
+    const locationId = req.query.location_id ? parseInt(req.query.location_id, 10) : null;
+    if (!plate) return res.status(400).json({ error: 'validation_error', detail: '`plate` is required.' });
+
+    const cacheKey = locationId ? `active_bill:${plate}:${locationId}` : `active_bill:${plate}`;
+    let bill = await redis.cacheGet(cacheKey);
+    if (!bill) {
+      bill = await getActiveBillForPlate(plate, locationId);
+      if (bill) {
+        const cooldownSecs = (cfg.billing?.cooldownMinutes ?? 1) * 60;
+        await redis.cacheSet(cacheKey, bill, cooldownSecs);
+      }
+    }'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2a. BACKEND — OCR route: POST /api/vehicles/ocr-plate/
+# ═══════════════════════════════════════════════════════════════════════════════
+
+OCR_ROUTE_ADDITION = r'''
+
+// ── POST /api/vehicles/ocr-plate/ ────────────────────────────────────────────
+// Accepts a base64 image → runs Tesseract OCR → extracts TZ plate number
+// Body: { image: "<base64 string>", mimeType: "image/jpeg" }
+router.post('/ocr-plate/', async (req, res, next) => {
+  try {
+    const { image, mimeType = 'image/jpeg' } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: 'validation_error', detail: '`image` (base64) is required.' });
+    }
+
+    // Write base64 to temp file
+    const os   = require('os');
+    const path = require('path');
+    const fs   = require('fs');
+    const tmpFile = path.join(os.tmpdir(), `plate_${Date.now()}.jpg`);
+
+    const imgBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    fs.writeFileSync(tmpFile, imgBuffer);
+
+    let extractedPlate = null;
+    let rawText        = '';
+
+    try {
+      const Tesseract = require('tesseract.js');
+      const { data: { text } } = await Tesseract.recognize(tmpFile, 'eng', {
+        logger: () => {},  // silence progress logs
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+      });
+      rawText = text;
+      console.log('[OCR] Raw text:', text.replace(/\n/g, ' ').trim());
+
+      // Extract Tanzania plate pattern: T + 3 digits + 3 letters  (e.g. T882DXZ)
+      // Also handle with spaces: T 882 DXZ
+      const plateRegex = /\bT\s*(\d{3})\s*([A-Z]{3})\b/i;
+      const match = text.replace(/\s+/g, ' ').toUpperCase().match(plateRegex);
+      if (match) {
+        extractedPlate = `T${match[1]}${match[2]}`;
+        console.log('[OCR] Extracted plate:', extractedPlate);
+      }
+    } finally {
+      // Clean up temp file
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+
+    if (extractedPlate) {
+      return res.json({
+        success:  true,
+        plate:    extractedPlate,
+        rawText:  rawText.trim(),
+      });
+    }
+
+    return res.json({
+      success:  false,
+      plate:    null,
+      rawText:  rawText.trim(),
+      detail:   'Could not extract a valid Tanzania plate number from the image. Try again with better lighting.',
+    });
+  } catch (err) {
+    console.error('[OCR] Error:', err.message);
+    next(err);
+  }
+});
+'''
+
+OCR_ROUTE_INSERT_BEFORE = r'''module.exports = router;'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2b. MOBILE — api.ts: add ocrPlate service call
+# ═══════════════════════════════════════════════════════════════════════════════
+
+API_VEHICLE_OLD = r'''export const vehicleService = {
+  lookup:    (plate: string) => apiClient.get(`/api/vehicles/lookup/?plate=${encodeURIComponent(plate)}`),
+  locations: ()              => apiClient.get('/api/vehicles/locations/'),
+};'''
+
+API_VEHICLE_NEW = r'''export const vehicleService = {
+  lookup:    (plate: string)                    => apiClient.get(`/api/vehicles/lookup/?plate=${encodeURIComponent(plate)}`),
+  locations: ()                                 => apiClient.get('/api/vehicles/locations/'),
+  ocrPlate:  (image: string, mimeType?: string) => apiClient.post('/api/vehicles/ocr-plate/', { image, mimeType: mimeType ?? 'image/jpeg' }),
+};'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2c. MOBILE — active-bill check: pass location_id
+# ═══════════════════════════════════════════════════════════════════════════════
+
+API_ACTIVEBILL_OLD = r'''  activeBill: (plate: string) =>
+    apiClient.get(`/api/billing/active-bill/?plate=${encodeURIComponent(plate)}`),'''
+
+API_ACTIVEBILL_NEW = r'''  activeBill: (plate: string, locationId?: number) =>
+    apiClient.get(`/api/billing/active-bill/?plate=${encodeURIComponent(plate)}${locationId ? `&location_id=${locationId}` : ''}`),'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2d. MOBILE — Full rewrite of lookup.tsx with camera OCR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+LOOKUP_TSX = r'''/**
  * ParkiPay — Vehicle Lookup Screen  (v4 — camera OCR)
  *
  * • System keyboard with autoCapitalize for manual entry
@@ -609,3 +913,99 @@ function makeStyles(C: ReturnType<typeof palette>) {
     backText:    { fontSize:13, fontWeight:'600' },
   });
 }
+'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  RUN ALL PATCHES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run(root: Path):
+    be  = root / 'backend'
+    mob = root / 'mobile'
+
+    print('\n── Backend: duplicate cooldown ────────────────────────────────')
+    patch(be / 'src/config/index.js',  CONFIG_BILLING_OLD,   CONFIG_BILLING_NEW,   'add cooldownMinutes')
+    write(be / 'src/lib/controlNumber.js', CONTROL_NUMBER_JS)
+    patch(be / 'src/routes/billing.js', BILLING_DUP_OLD,      BILLING_DUP_NEW,      'dup check uses location_id')
+    patch(be / 'src/routes/billing.js', BILLING_DUP_CACHE_OLD,BILLING_DUP_CACHE_NEW,'cache TTL = cooldown window')
+    patch(be / 'src/routes/billing.js', BILLING_DUP_RESP_OLD, BILLING_DUP_RESP_NEW, 'response includes allowed_after')
+    patch(be / 'src/routes/billing.js', BILLING_ACTIVEBILL_OLD,BILLING_ACTIVEBILL_NEW,'active-bill accepts location_id')
+
+    print('\n── Backend: OCR plate endpoint ────────────────────────────────')
+    veh_route = be / 'src/routes/vehicles.js'
+    txt = veh_route.read_text(encoding='utf-8')
+    if OCR_ROUTE_INSERT_BEFORE in txt and 'ocr-plate' not in txt:
+        veh_route.write_text(
+            txt.replace(OCR_ROUTE_INSERT_BEFORE, OCR_ROUTE_ADDITION + OCR_ROUTE_INSERT_BEFORE, 1),
+            encoding='utf-8'
+        )
+        print('  ✅ Patched vehicles.js [OCR route added]')
+    elif 'ocr-plate' in txt:
+        print('  ✅ vehicles.js [OCR route already present]')
+    else:
+        print('  ⚠  vehicles.js: could not insert OCR route')
+
+    print('\n── Backend: install tesseract.js ──────────────────────────────')
+    pkg = be / 'package.json'
+    d   = json.loads(pkg.read_text())
+    if 'tesseract.js' not in d.get('dependencies', {}):
+        d.setdefault('dependencies', {})['tesseract.js'] = '^5.1.1'
+        pkg.write_text(json.dumps(d, indent=2) + '\n')
+        print('  ✅ Added tesseract.js to backend/package.json')
+        print('  ℹ  Run: cd backend && npm install')
+    else:
+        print('  ✅ tesseract.js already in dependencies')
+
+    print('\n── Mobile: api.ts ─────────────────────────────────────────────')
+    patch(mob / 'services/api.ts', API_VEHICLE_OLD,      API_VEHICLE_NEW,     'add ocrPlate service')
+    patch(mob / 'services/api.ts', API_ACTIVEBILL_OLD,   API_ACTIVEBILL_NEW,  'activeBill passes locationId')
+
+    print('\n── Mobile: lookup.tsx (camera OCR) ────────────────────────────')
+    write(mob / 'app/(app)/lookup.tsx', LOOKUP_TSX)
+
+    print('\n── Mobile: install expo-image-picker ──────────────────────────')
+    mpkg = mob / 'package.json'
+    md   = json.loads(mpkg.read_text())
+    changed = False
+    if 'expo-image-picker' not in md.get('dependencies', {}):
+        md.setdefault('dependencies', {})['expo-image-picker'] = '~16.0.6'
+        changed = True
+    if changed:
+        mpkg.write_text(json.dumps(md, indent=2) + '\n')
+        print('  ✅ Added expo-image-picker to mobile/package.json')
+        print('  ℹ  Run: cd mobile && npx expo install expo-image-picker')
+    else:
+        print('  ✅ expo-image-picker already present')
+
+    print('''
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  Final Patch complete!                                                      ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  CHANGES                                                                     ║
+║  1. Duplicate cooldown:  1 minute per plate+location (was 5 hours)          ║
+║     • Same plate at DIFFERENT location → still allowed immediately          ║
+║     • Duplicate modal now shows "Next bill allowed at: HH:MM:SS"            ║
+║     • Set BILLING_COOLDOWN_MINUTES env var on Render to change window       ║
+║  2. Camera OCR plate scan:                                                   ║
+║     • Tap blue 📷 button → camera opens → aim at plate → capture           ║
+║     • Image sent to backend → Tesseract OCR → extracts plate text          ║
+║     • Auto-fills plate field + runs lookup immediately                      ║
+║                                                                              ║
+║  INSTALL STEPS (run on your machine):                                       ║
+║  cd backend && npm install          (installs tesseract.js)                 ║
+║  cd mobile && npx expo install expo-image-picker                            ║
+║                                                                              ║
+║  DEPLOY:                                                                     ║
+║  git add -A && git commit -m "feat: 1-min cooldown + camera OCR" && git push║
+║                                                                              ║
+║  RENDER env vars (optional):                                                 ║
+║  BILLING_COOLDOWN_MINUTES=1   (default; change for production)              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+''')
+
+
+if __name__ == '__main__':
+    root = find_root(sys.argv[1] if len(sys.argv) > 1 else None)
+    print(f'Project root: {root}')
+    run(root)
