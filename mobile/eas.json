@@ -1,31 +1,29 @@
 {
   "cli": {
-    "version": ">= 14.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "http://localhost:8000"
-      }
+      "distribution": "internal"
     },
-    "staging": {
-      "distribution": "internal",
+    "preview": {
       "android": {
         "buildType": "apk"
       },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://parkipay-api.onrender.com"
-      }
+      "ios": {
+        "simulator": false,
+        "distribution": "internal"
+      },
+      "distribution": "internal"
     },
     "production": {
-      "distribution": "store",
       "android": {
         "buildType": "app-bundle"
       },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://parkipay-api.onrender.com"
+      "ios": {
+        "distribution": "store"
       }
     }
   },
