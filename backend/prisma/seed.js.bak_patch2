@@ -89,22 +89,6 @@ async function main() {
   });
   console.log(`  ✅ Sample vehicle: ${vehicle.plateNumber} (${vehicle.ownerName})`);
 
-
-  // ── Supervisor (test) ─────────────────────────────────────────────────────
-  const supervisor = await prisma.officer.upsert({
-    where:  { employeeId: 'SUP-0001' },
-    update: {},
-    create: {
-      employeeId:   'SUP-0001',
-      fullName:     'Test Supervisor',
-      phone:        '+255700000002',
-      email:        'supervisor@parkipay.go.tz',
-      role:         'SUPERVISOR',
-      locationId:   dar.id,
-    },
-  });
-  console.log(`  ✅ Supervisor: ${supervisor.employeeId} (${supervisor.fullName})`);
-
   console.log('\n🎉 Seed complete. You can log in with:');
   console.log('   Admin:         ADMIN001   / Admin@1234');
   console.log('   Field Officer: OFF001     / Officer@1234');

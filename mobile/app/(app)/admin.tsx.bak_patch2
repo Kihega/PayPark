@@ -358,25 +358,8 @@ export default function AdminScreen() {
 
           <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('employeeIdLabel')}</Text>
           <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
-            value={newEmpId}
-            onChangeText={raw => {
-              // Auto-insert dash after TZ or SUP prefix
-              const clean = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-              const parts = clean.split('-');
-              const prefix = parts[0];
-              const digits = parts.slice(1).join('').replace(/[^0-9]/g, '');
-              if ((prefix === 'TZ' || prefix === 'SUP') && parts.length === 1) {
-                setNewEmpId(prefix + '-');
-              } else if (parts.length >= 2) {
-                setNewEmpId(prefix + '-' + digits.slice(0, 4));
-              } else {
-                setNewEmpId(prefix.slice(0, 3));
-              }
-            }}
-            placeholder="TZ-XXXX or SUP-XXXX"
-            autoCapitalize="characters"
-            placeholderTextColor={C.textMuted}
-          />
+            value={newEmpId} onChangeText={setNewEmpId} placeholder="TZ-XXXX or SUP-XXXX"
+            autoCapitalize="characters" placeholderTextColor={C.textMuted}/>
 
           <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('selectLocation')}</Text>
           <View style={S.locGrid}>

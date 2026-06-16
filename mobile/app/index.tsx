@@ -1,12 +1,12 @@
 /**
- * ParkiPay — Initial Loading Screen
+ * ParkiPay — Initial Loading Screen  (patched: responsive centred wordmark)
  *
- * Shows the "ParkiPay" wordmark beautifully decorated with Tanzania
- * sprint colours (green #1EB53A, yellow #FCD116, black #000000) as
- * gradient glowing edges on a pure white background.
+ * Shows the "ParkiPay" wordmark decorated with Tanzania sprint colours
+ * (green #1EB53A, yellow #FCD116, black #000000) as gradient glowing
+ * edges on a pure white background.
  *
- * Displayed while the app resolves stored auth (SecureStore read).
- * The root layout redirects away once isLoading = false.
+ * All sizing uses flex / percentage so the logo is perfectly centred on
+ * every device (phone, tablet, foldable, any DPI).
  */
 import { useEffect, useRef } from 'react';
 import {
@@ -15,66 +15,47 @@ import {
   StyleSheet,
   Text,
   View,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SprintColors, FontSize, FontWeight, LetterSpacing } from '@/constants/theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 export default function SplashScreen() {
-  // Animation values
   const wordmarkOpacity = useRef(new Animated.Value(0)).current;
-  const wordmarkScale = useRef(new Animated.Value(0.7)).current;
-  const glowOpacity = useRef(new Animated.Value(0)).current;
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const dotScale = useRef(new Animated.Value(0)).current;
+  const wordmarkScale   = useRef(new Animated.Value(0.7)).current;
+  const glowOpacity     = useRef(new Animated.Value(0)).current;
+  const taglineOpacity  = useRef(new Animated.Value(0)).current;
+  const dotScale        = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.sequence([
-      // 1. Wordmark fades + scales in
       Animated.parallel([
         Animated.timing(wordmarkOpacity, {
-          toValue: 1,
-          duration: 700,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          toValue: 1, duration: 700,
+          easing: Easing.out(Easing.cubic), useNativeDriver: true,
         }),
         Animated.spring(wordmarkScale, {
-          toValue: 1,
-          friction: 5,
-          tension: 60,
-          useNativeDriver: true,
+          toValue: 1, friction: 5, tension: 60, useNativeDriver: true,
         }),
       ]),
-      // 2. Glow pulses in
       Animated.timing(glowOpacity, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        toValue: 1, duration: 500,
+        easing: Easing.out(Easing.quad), useNativeDriver: true,
       }),
-      // 3. Tagline fades in
       Animated.timing(taglineOpacity, {
-        toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        toValue: 1, duration: 400,
+        easing: Easing.out(Easing.quad), useNativeDriver: true,
       }),
-      // 4. Loading dots bounce in
       Animated.spring(dotScale, {
-        toValue: 1,
-        friction: 4,
-        tension: 80,
-        useNativeDriver: true,
+        toValue: 1, friction: 4, tension: 80, useNativeDriver: true,
       }),
     ]).start();
   }, [dotScale, glowOpacity, taglineOpacity, wordmarkOpacity, wordmarkScale]);
 
   return (
+    /* Root fills the whole screen and centres everything */
     <View style={styles.container}>
 
-      {/* ── Ambient glow backdrop ──────────────────────────────────────── */}
+      {/* Ambient glow backdrop */}
       <Animated.View style={[styles.glowBackdrop, { opacity: glowOpacity }]}>
         <LinearGradient
           colors={[
@@ -88,25 +69,22 @@ export default function SplashScreen() {
         />
       </Animated.View>
 
-      {/* ── Wordmark block ─────────────────────────────────────────────── */}
+      {/* ── Wordmark block — centred, width driven by content ── */}
       <Animated.View
         style={[
           styles.wordmarkContainer,
-          {
-            opacity: wordmarkOpacity,
-            transform: [{ scale: wordmarkScale }],
-          },
+          { opacity: wordmarkOpacity, transform: [{ scale: wordmarkScale }] },
         ]}
       >
-        {/* Top gradient bar (green → yellow) */}
+        {/* Top gradient bar */}
         <LinearGradient
           colors={[SprintColors.green, SprintColors.yellow]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={styles.accentBarTop}
+          style={styles.accentBar}
         />
 
-        {/* Wordmark: "Parki" in green, "Pay" in yellow, underline in black */}
+        {/* "Parki" + "Pay" */}
         <View style={styles.wordmarkRow}>
           <Text style={[styles.wordmarkText, { color: SprintColors.green }]}>
             Parki
@@ -116,41 +94,43 @@ export default function SplashScreen() {
           </Text>
         </View>
 
-        {/* Subtle underline in black */}
+        {/* Underline */}
         <View style={styles.wordmarkUnderline} />
 
-        {/* Bottom gradient bar (yellow → black) */}
+        {/* Bottom gradient bar */}
         <LinearGradient
           colors={[SprintColors.yellow, SprintColors.black]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={styles.accentBarBottom}
+          style={styles.accentBar}
         />
       </Animated.View>
 
-      {/* ── Tagline ────────────────────────────────────────────────────── */}
+      {/* Tagline */}
       <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
         Digital Parking · Tanzania
       </Animated.Text>
 
-      {/* ── Loading indicator ──────────────────────────────────────────── */}
+      {/* Loading dots */}
       <Animated.View
-        style={[styles.dotsRow, { transform: [{ scale: dotScale }], opacity: taglineOpacity }]}
+        style={[
+          styles.dotsRow,
+          { transform: [{ scale: dotScale }], opacity: taglineOpacity },
+        ]}
       >
         <LoadingDot delay={0} />
         <LoadingDot delay={200} />
         <LoadingDot delay={400} />
       </Animated.View>
 
-      {/* ── Version / footer ───────────────────────────────────────────── */}
+      {/* Version */}
       <Animated.Text style={[styles.version, { opacity: taglineOpacity }]}>
-        v1.0.0 — Sprint 0
+        v1.0.0
       </Animated.Text>
     </View>
   );
 }
 
-// ── Loading dot component ──────────────────────────────────────────────────────
 function LoadingDot({ delay }: { delay: number }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
 
@@ -158,17 +138,12 @@ function LoadingDot({ delay }: { delay: number }) {
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
-          toValue: 1,
-          duration: 500,
-          delay,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          toValue: 1, duration: 500, delay,
+          easing: Easing.inOut(Easing.quad), useNativeDriver: true,
         }),
         Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 500,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          toValue: 0.3, duration: 500,
+          easing: Easing.inOut(Easing.quad), useNativeDriver: true,
         }),
       ])
     );
@@ -176,38 +151,27 @@ function LoadingDot({ delay }: { delay: number }) {
     return () => pulse.stop();
   }, [delay, opacity]);
 
-  return (
-    <Animated.View
-      style={[
-        styles.dot,
-        { opacity },
-        // Alternate colours: green, yellow, black
-      ]}
-    />
-  );
+  return <Animated.View style={[styles.dot, { opacity }]} />;
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'center',    // vertically centred
+    paddingHorizontal: '8%',     // percentage → adapts to any screen width
   },
 
-  // Glow backdrop
   glowBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 0,
   },
 
-  // Wordmark wrapper
+  // Wordmark wrapper — intrinsic width so bars match text width
   wordmarkContainer: {
     alignItems: 'center',
-    marginBottom: 24,
-    // Outer green glow (iOS shadow)
+    alignSelf: 'center',         // centres within parent regardless of width
+    marginBottom: 28,
     shadowColor: SprintColors.green,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.45,
@@ -215,16 +179,19 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
 
-  accentBarTop: {
-    width: SCREEN_WIDTH * 0.65,
+  // Accent bars: 65 % of container width, flex-driven
+  accentBar: {
+    width: '65%',               // relative to wordmarkContainer's own width
+    alignSelf: 'center',
     height: 4,
     borderRadius: 2,
-    marginBottom: 16,
+    marginVertical: 14,
   },
 
   wordmarkRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    justifyContent: 'center',
   },
 
   wordmarkText: {
@@ -232,24 +199,17 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.black,
     letterSpacing: LetterSpacing.display,
     includeFontPadding: false,
+    textAlign: 'center',
   },
 
   wordmarkUnderline: {
-    width: SCREEN_WIDTH * 0.55,
+    // stretches to match the text row
+    alignSelf: 'stretch',
     height: 3,
     backgroundColor: SprintColors.black,
-    marginTop: 8,
     borderRadius: 2,
   },
 
-  accentBarBottom: {
-    width: SCREEN_WIDTH * 0.65,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 16,
-  },
-
-  // Tagline
   tagline: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.medium,
@@ -257,13 +217,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: 40,
+    textAlign: 'center',
   },
 
-  // Loading dots
   dotsRow: {
     flexDirection: 'row',
     gap: 10,
     marginBottom: 16,
+    justifyContent: 'center',
   },
 
   dot: {
@@ -273,10 +234,10 @@ const styles = StyleSheet.create({
     backgroundColor: SprintColors.green,
   },
 
-  // Version
   version: {
     position: 'absolute',
     bottom: 40,
+    alignSelf: 'center',
     fontSize: FontSize.sm,
     color: '#A6A6A6',
     letterSpacing: 0.5,

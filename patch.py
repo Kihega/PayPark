@@ -1,4 +1,484 @@
+#!/usr/bin/env python3
+"""
+patch2.py — ParkiPay Mobile App — Second-Round Patch
+=====================================================
+Applies the following fixes on top of patch.py:
+
+  Fix 1 → Clean up all *.bak_patch files left by the previous patch.
+
+  Fix 2 → Supervisor test ID: SUP-001 → SUP-0001
+             • backend/prisma/seed.js  — update test-seed comment table +
+               any hardcoded SUP-001 references to SUP-0001.
+           Auto-dash insertion in ID inputs:
+             • mobile/app/(auth)/login.tsx  — smart handleChangeText that
+               inserts '-' automatically after "TZ" or "SUP" prefix, so
+               the user never types the dash manually.
+             • mobile/app/(app)/admin.tsx   — same logic applied to the
+               Employee-ID field in the Add-Attendant modal.
+
+  Fix 3 → mobile/app/(app)/home.tsx
+             Remove the refresh icon TouchableOpacity from the top bar
+             (the pull-to-refresh on the ScrollView still works).
+
+  Fix 4 → mobile/app/(app)/lookup.tsx
+             • Remove the "Not in Registry" red card entirely.
+             • While typing: validate format on every keystroke;
+               if the partial entry already violates the allowed
+               character pattern highlight border red immediately
+               (no card, no inline text — just red border).
+             • On VERIFY with an invalid format: shake + red border,
+               no card.
+             • On VERIFY with valid format but plate not in database:
+               Alert.alert popup "Enter Valid vehicle Plate Number"
+               with a single OK button; closes cleanly so the user
+               can retype.
+
+Usage
+-----
+  python3 patch2.py                        # run from repo root or mobile dir
+  python3 patch2.py /path/to/PayPark-main  # explicit path
+"""
+
+import os
+import re
+import sys
+import glob
+import shutil
+from pathlib import Path
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def resolve_root(argv):
+    root = Path(argv[1]).expanduser().resolve() if len(argv) > 1 else Path.cwd()
+    mobile = root / "mobile"
+    if not mobile.is_dir():
+        if (root / "app").is_dir():
+            mobile = root          # user passed the mobile dir directly
+        else:
+            sys.exit(f"[patch2] ERROR: cannot find 'mobile/' under {root}")
+    return root, mobile
+
+
+def backup(path):
+    bak = path.with_suffix(path.suffix + ".bak_patch2")
+    if not bak.exists():
+        shutil.copy2(path, bak)
+        print(f"  [backup] {path.name} → .bak_patch2")
+
+
+def write(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    print(f"  [write]  {path}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX 1 — Remove *.bak_patch files
+# ══════════════════════════════════════════════════════════════════════════════
+
+def remove_bak_patch_files(root):
+    pattern = str(root / "**" / "*.bak_patch")
+    files = glob.glob(pattern, recursive=True)
+    if not files:
+        print("  [info]  No *.bak_patch files found — already clean.")
+        return
+    for f in sorted(files):
+        os.remove(f)
+        print(f"  [del]   {f}")
+    print(f"  [done]  Removed {len(files)} backup file(s).")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX 2a — seed.js: update SUP-001 → SUP-0001
+# ══════════════════════════════════════════════════════════════════════════════
+
+def patch_seed_js(seed_path):
+    if not seed_path.exists():
+        print(f"  [WARN]  seed.js not found at {seed_path}")
+        return
+    backup(seed_path)
+    src = seed_path.read_text(encoding="utf-8")
+
+    # Replace any occurrence of 'SUP-001' with 'SUP-0001' (test supervisor id)
+    new_src = src.replace("'SUP-001'", "'SUP-0001'").replace('"SUP-001"', '"SUP-0001"')
+
+    # Also update seed table comment if it references SUP-001
+    new_src = new_src.replace("SUP-001", "SUP-0001")
+
+    if new_src == src:
+        print("  [info]  seed.js — SUP-001 not found (may already be SUP-0001).")
+    else:
+        seed_path.write_text(new_src, encoding="utf-8")
+        print("  [patch] seed.js — SUP-001 → SUP-0001")
+
+    # Add/update the supervisor entry if missing
+    if "SUP-0001" not in seed_path.read_text(encoding="utf-8"):
+        # Append a supervisor upsert before the closing main() block
+        src2 = seed_path.read_text(encoding="utf-8")
+        supervisor_block = """
+  // ── Supervisor (test) ─────────────────────────────────────────────────────
+  const supervisor = await prisma.officer.upsert({
+    where:  { employeeId: 'SUP-0001' },
+    update: {},
+    create: {
+      employeeId:   'SUP-0001',
+      fullName:     'Test Supervisor',
+      phone:        '+255700000002',
+      email:        'supervisor@parkipay.go.tz',
+      role:         'SUPERVISOR',
+      locationId:   dar.id,
+    },
+  });
+  console.log(`  ✅ Supervisor: ${supervisor.employeeId} (${supervisor.fullName})`);
+"""
+        src2 = src2.replace(
+            "  console.log('\\n🎉 Seed complete.",
+            supervisor_block + "\n  console.log('\\n🎉 Seed complete."
+        )
+        seed_path.write_text(src2, encoding="utf-8")
+        print("  [patch] seed.js — added SUP-0001 supervisor upsert block")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX 2b — login.tsx: auto-dash insertion in ID input
+# ══════════════════════════════════════════════════════════════════════════════
+
+LOGIN_TSX = r"""/**
+ * ParkiPay — Login  (patch2: auto-dash, no footer, format guard)
+ *
+ * ID formats:
+ *   Attendant   → TZ-XXXX   (TZ + dash auto-inserted + 4 digits)
+ *   Supervisor  → SUP-XXXX  (SUP + dash auto-inserted + 4 digits)
+ *
+ * The dash is inserted automatically when the user finishes typing
+ * the prefix (TZ or SUP), so they only need to type numbers after.
+ */
+import { useState } from 'react';
+import {
+  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
+} from 'react-native';
+import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/hooks/useAuth';
+import { useSettingsStore } from '@/store/settingsStore';
+import { t } from '@/constants/i18n';
+import { Colors, SprintColors, Shadows } from '@/constants/theme';
+
+// Accepted final formats
+const ATTENDANT_RE  = /^TZ-\d{4}$/;
+const SUPERVISOR_RE = /^SUP-\d{4}$/;
+
+function isValidIdFormat(id: string): boolean {
+  return ATTENDANT_RE.test(id) || SUPERVISOR_RE.test(id);
+}
+
 /**
+ * Smart formatter: keeps only A-Z 0-9 and one dash,
+ * auto-inserts the dash after the prefix (TZ or SUP).
+ */
+function smartFormat(raw: string): string {
+  // Strip everything except letters, digits, dash; force uppercase
+  const clean = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+
+  // Never allow more than one dash
+  const parts = clean.split('-');
+  const prefix = parts[0];
+  const digits = parts.slice(1).join('').replace(/[^0-9]/g, '');
+
+  // Auto-insert dash once prefix matches TZ or SUP
+  if ((prefix === 'TZ' || prefix === 'SUP') && parts.length === 1) {
+    // User just finished typing the prefix with no dash yet — add it
+    return prefix + '-';
+  }
+
+  if (parts.length >= 2) {
+    // Has a dash — reconstruct cleanly: PREFIX-DIGITS (max 4 digits)
+    return prefix + '-' + digits.slice(0, 4);
+  }
+
+  // Still typing prefix (< 3 chars), just return cleaned prefix
+  return prefix.slice(0, 3);
+}
+
+export default function LoginScreen() {
+  const { loginById, isLoading, error, clearError } = useAuth();
+  const { language } = useSettingsStore();
+  const tr = (k: string) => t(language, k);
+
+  const [employeeId, setEmployeeId] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const errMsg = localError ?? error?.message ?? null;
+
+  const handleChangeText = (raw: string) => {
+    setLocalError(null);
+    clearError();
+    setEmployeeId(smartFormat(raw));
+  };
+
+  const handleLogin = async () => {
+    setLocalError(null);
+    clearError();
+
+    const id = employeeId.trim();
+
+    if (!id) {
+      setLocalError(tr('enterIdError'));
+      return;
+    }
+
+    if (!isValidIdFormat(id)) {
+      setLocalError(
+        'Invalid ID format. Use TZ-XXXX for attendants or SUP-XXXX for supervisors.'
+      );
+      return;
+    }
+
+    const result = await loginById(id);
+    if (!result.success) return;
+
+    if (result.role === 'SUPERVISOR' || result.role === 'ADMIN') {
+      router.replace('/(app)/admin');
+    } else {
+      router.replace('/(app)/home');
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
+        {/* Branding */}
+        <View style={styles.header}>
+          <LinearGradient
+            colors={[SprintColors.green, SprintColors.yellow]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.accent}
+          />
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={[styles.logo, { color: SprintColors.green }]}>Parki</Text>
+            <Text style={[styles.logo, { color: SprintColors.yellow }]}>Pay</Text>
+          </View>
+          <Text style={styles.sub1}>{tr('taglineSw')}</Text>
+          <Text style={styles.sub2}>{tr('taglineEn')}</Text>
+        </View>
+
+        {/* Card */}
+        <View style={styles.card}>
+          <Text style={styles.title}>{tr('signIn')}</Text>
+          <Text style={styles.subtitle}>{tr('signInSub')}</Text>
+
+          <Text style={styles.label}>{tr('officerId')}</Text>
+          <View style={[styles.inputRow, errMsg ? styles.inputErr : null]}>
+            <Ionicons
+              name="id-card-outline" size={18}
+              color={errMsg ? Colors.error : '#6B7280'}
+              style={{ marginLeft: 12 }}
+            />
+            <TextInput
+              style={styles.input}
+              value={employeeId}
+              onChangeText={handleChangeText}
+              placeholder="TZ-XXXX  or  SUP-XXXX"
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+              editable={!isLoading}
+            />
+          </View>
+
+          {/* Format hint */}
+          <Text style={styles.formatHint}>
+            Attendants: TZ-XXXX · Supervisors: SUP-XXXX
+          </Text>
+
+          {/* Error */}
+          {errMsg ? (
+            <View style={styles.errBox}>
+              <Ionicons name="alert-circle-outline" size={15} color={Colors.error} />
+              <Text style={styles.errText}>{errMsg}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.btn, isLoading && { opacity: 0.6 }]}
+            onPress={handleLogin}
+            disabled={isLoading}
+            activeOpacity={0.85}
+          >
+            {isLoading
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                  <Ionicons name="log-in-outline" size={20} color="#fff" />
+                  <Text style={styles.btnText}>{tr('signInBtn')}</Text>
+                </>
+            }
+          </TouchableOpacity>
+        </View>
+
+        {/* Footer intentionally removed */}
+
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root:       { flex: 1, backgroundColor: Colors.backgroundSecondary },
+  scroll:     { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40, justifyContent: 'center' },
+  header:     { alignItems: 'center', paddingTop: 60, paddingBottom: 28 },
+  accent:     { width: 180, height: 4, borderRadius: 2, marginBottom: 16 },
+  logo:       { fontSize: 36, fontWeight: '900', letterSpacing: 1 },
+  sub1:       { fontSize: 13, color: '#404040', marginTop: 4 },
+  sub2:       { fontSize: 13, color: '#737373' },
+  card:       { backgroundColor: '#fff', borderRadius: 16, padding: 24, ...Shadows.md },
+  title:      { fontSize: 28, fontWeight: '800', textAlign: 'center', color: '#1A1A1A', marginBottom: 4 },
+  subtitle:   { fontSize: 13, color: '#595959', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  label:      { fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 6 },
+  inputRow:   {
+    flexDirection: 'row', alignItems: 'center', height: 54,
+    borderWidth: 1.5, borderColor: '#D1D5DB', borderRadius: 12, backgroundColor: '#fff',
+  },
+  inputErr:   { borderColor: Colors.error },
+  input:      { flex: 1, fontSize: 15, color: '#1A1A1A', paddingHorizontal: 10 },
+  formatHint: { fontSize: 11, color: '#9CA3AF', marginTop: 5, marginBottom: 2 },
+  errBox:     {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    backgroundColor: Colors.errorSurface, borderRadius: 10, padding: 10,
+    marginTop: 8, borderLeftWidth: 3, borderLeftColor: Colors.error,
+  },
+  errText:    { fontSize: 13, color: Colors.error, flex: 1, lineHeight: 18 },
+  btn:        {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    height: 56, backgroundColor: '#0D1117', borderRadius: 12, marginTop: 20,
+  },
+  btnText:    { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
+});
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX 2c — admin.tsx: auto-dash in employee-ID field (targeted replacement)
+# ══════════════════════════════════════════════════════════════════════════════
+
+ADMIN_EMP_ID_OLD = \
+"""          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('employeeIdLabel')}</Text>
+          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
+            value={newEmpId} onChangeText={setNewEmpId} placeholder=\"TZ-XXXX or SUP-XXXX\"
+            autoCapitalize=\"characters\" placeholderTextColor={C.textMuted}/>"""
+
+ADMIN_EMP_ID_NEW = \
+"""          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('employeeIdLabel')}</Text>
+          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
+            value={newEmpId}
+            onChangeText={raw => {
+              // Auto-insert dash after TZ or SUP prefix
+              const clean = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+              const parts = clean.split('-');
+              const prefix = parts[0];
+              const digits = parts.slice(1).join('').replace(/[^0-9]/g, '');
+              if ((prefix === 'TZ' || prefix === 'SUP') && parts.length === 1) {
+                setNewEmpId(prefix + '-');
+              } else if (parts.length >= 2) {
+                setNewEmpId(prefix + '-' + digits.slice(0, 4));
+              } else {
+                setNewEmpId(prefix.slice(0, 3));
+              }
+            }}
+            placeholder="TZ-XXXX or SUP-XXXX"
+            autoCapitalize="characters"
+            placeholderTextColor={C.textMuted}
+          />"""
+
+
+def patch_admin_emp_id(admin_path):
+    if not admin_path.exists():
+        print(f"  [WARN]  admin.tsx not found at {admin_path}")
+        return
+    backup(admin_path)
+    src = admin_path.read_text(encoding="utf-8")
+
+    if ADMIN_EMP_ID_OLD in src:
+        src = src.replace(ADMIN_EMP_ID_OLD, ADMIN_EMP_ID_NEW)
+        admin_path.write_text(src, encoding="utf-8")
+        print("  [patch] admin.tsx — auto-dash applied to Employee ID field")
+    else:
+        # Fallback: use regex to patch onChangeText on the employee ID input
+        pattern = r"(value=\{newEmpId\} onChangeText=\{setNewEmpId\})"
+        replacement = (
+            "value={newEmpId} onChangeText={raw => { "
+            "const c=raw.toUpperCase().replace(/[^A-Z0-9-]/g,''); "
+            "const p=c.split('-'); const px=p[0]; const dg=p.slice(1).join('').replace(/[^0-9]/g,''); "
+            "if((px==='TZ'||px==='SUP')&&p.length===1){setNewEmpId(px+'-');} "
+            "else if(p.length>=2){setNewEmpId(px+'-'+dg.slice(0,4));} "
+            "else{setNewEmpId(px.slice(0,3));} }}"
+        )
+        new_src = re.sub(pattern, replacement, src, count=1)
+        if new_src != src:
+            admin_path.write_text(new_src, encoding="utf-8")
+            print("  [patch] admin.tsx — auto-dash applied (regex fallback)")
+        else:
+            print("  [WARN]  admin.tsx — could not locate employee ID input; skipping auto-dash")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX 3 — home.tsx: remove refresh icon button from top bar
+# ══════════════════════════════════════════════════════════════════════════════
+
+HOME_REFRESH_OLD = """\
+        <TouchableOpacity style={S.iconBtn} onPress={loadData}>
+          <Ionicons name=\"refresh-outline\" size={22} color={C.headerText} />
+        </TouchableOpacity>"""
+
+HOME_REFRESH_NEW = """\
+        {/* refresh icon removed — pull-to-refresh on scroll still works */}
+        <View style={S.iconBtn} />"""
+
+
+def patch_home_refresh(home_path):
+    if not home_path.exists():
+        print(f"  [WARN]  home.tsx not found at {home_path}")
+        return
+    backup(home_path)
+    src = home_path.read_text(encoding="utf-8")
+
+    if HOME_REFRESH_OLD in src:
+        src = src.replace(HOME_REFRESH_OLD, HOME_REFRESH_NEW)
+        home_path.write_text(src, encoding="utf-8")
+        print("  [patch] home.tsx — refresh icon removed from top bar")
+    else:
+        # Regex fallback
+        pattern = (
+            r'<TouchableOpacity\s+style=\{S\.iconBtn\}\s+onPress=\{loadData\}>\s*'
+            r'<Ionicons\s+name="refresh-outline"[^/]*/>\s*'
+            r'</TouchableOpacity>'
+        )
+        new_src = re.sub(
+            pattern,
+            '{/* refresh icon removed */}\n        <View style={S.iconBtn} />',
+            src,
+            count=1,
+        )
+        if new_src != src:
+            home_path.write_text(new_src, encoding="utf-8")
+            print("  [patch] home.tsx — refresh icon removed (regex fallback)")
+        else:
+            print("  [WARN]  home.tsx — refresh button pattern not matched; check manually")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX 4 — lookup.tsx: real-time format border, popup for not-found, no cards
+# ══════════════════════════════════════════════════════════════════════════════
+
+LOOKUP_TSX = r"""/**
  * ParkiPay — Vehicle Lookup Screen  (patch2)
  *
  * Changes vs patch1:
@@ -556,3 +1036,55 @@ function makeStyles(C: ReturnType<typeof palette>) {
     backText:    { fontSize: 13, fontWeight: '600' },
   });
 }
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Entry point
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    root, mobile = resolve_root(sys.argv)
+    print(f"\n[patch2] Project root : {root}")
+    print(f"[patch2] Mobile dir   : {mobile}\n")
+
+    # ── Fix 1: remove *.bak_patch files ──────────────────────────────────────
+    print("── Fix 1: Remove old *.bak_patch backup files ──────────────────────")
+    remove_bak_patch_files(root)
+
+    # ── Fix 2a: seed.js supervisor ID ────────────────────────────────────────
+    print("\n── Fix 2a: seed.js — SUP-001 → SUP-0001 ───────────────────────────")
+    seed = root / "backend" / "prisma" / "seed.js"
+    patch_seed_js(seed)
+
+    # ── Fix 2b: login.tsx — auto-dash ────────────────────────────────────────
+    print("\n── Fix 2b: login.tsx — auto-dash insertion ─────────────────────────")
+    login = mobile / "app" / "(auth)" / "login.tsx"
+    backup(login)
+    write(login, LOGIN_TSX)
+
+    # ── Fix 2c: admin.tsx — auto-dash in employee-ID field ───────────────────
+    print("\n── Fix 2c: admin.tsx — auto-dash in Add-Attendant Employee ID field ─")
+    admin = mobile / "app" / "(app)" / "admin.tsx"
+    patch_admin_emp_id(admin)
+
+    # ── Fix 3: home.tsx — remove top-bar refresh icon ────────────────────────
+    print("\n── Fix 3: home.tsx — remove top-bar refresh icon ───────────────────")
+    home = mobile / "app" / "(app)" / "home.tsx"
+    patch_home_refresh(home)
+
+    # ── Fix 4: lookup.tsx — real-time border, popup alert, no cards ──────────
+    print("\n── Fix 4: lookup.tsx — border validation + popup alert ─────────────")
+    lookup = mobile / "app" / "(app)" / "lookup.tsx"
+    backup(lookup)
+    write(lookup, LOOKUP_TSX)
+
+    print("\n[patch2] ✓ All fixes applied.\n")
+    print("Next steps:")
+    print("  cd mobile && npx expo start")
+    print("  (If you changed seed data: cd backend && npm run db:seed)\n")
+    print("  Backups saved as *.bak_patch2 next to each modified file.\n")
+
+
+if __name__ == "__main__":
+    main()
