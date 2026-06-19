@@ -11,7 +11,7 @@ COPY prisma ./prisma
 
 RUN npm ci
 
-RUN npx prisma generate
+
 
 RUN npm prune --omit=dev
 
