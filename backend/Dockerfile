@@ -14,13 +14,13 @@ COPY package*.json ./
 COPY prisma ./prisma
 
 # Install dependencies
-RUN npm ci --omit=dev
+RUN npm ci
 
-# ── Stage 2: Generate Prisma client ───────────────────────────────────────────
-FROM deps AS builder
-
-# Regenerate Prisma client explicitly
+# Generate Prisma client
 RUN npx prisma generate
+
+# Remove dev dependencies
+RUN npm prune --omit=dev
 
 # ── Stage 3: Final runtime image ─────────────────────────────────────────────
 FROM node:20-alpine AS runner
