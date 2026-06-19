@@ -1,5 +1,3 @@
-jest.setTimeout(30000);
-
 // ParkiPay — Auth route integration tests
 // Stack: Jest + Supertest against the real Express app
 // DB:    PostgreSQL test instance (see backend-ci.yml for service setup)

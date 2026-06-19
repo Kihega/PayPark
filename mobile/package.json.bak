@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "echo \"No tests yet\" && exit 0 --runInBand --detectOpenHandles",
+    "test": "echo \"No tests yet\" && exit 0",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

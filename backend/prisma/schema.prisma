@@ -1,18 +1,144 @@
-// ParkiPay — Prisma Schema
-// Database: PostgreSQL (Supabase or self-hosted)
-// Run `npm run db:generate` after any schema change.
-// Run `npm run db:migrate`  to apply migrations.
-
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")   // pooler — used at runtime
-  directUrl = env("DIRECT_URL")//direct
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// ── Enums ─────────────────────────────────────────────────────────────────────
+model Officer {
+  id                  Int               @id @default(autoincrement())
+  employeeId          String            @unique @map("employee_id")
+  fullName            String            @map("full_name")
+  phone               String            @default("")
+  email               String            @default("")
+  role                OfficerRole       @default(FIELD_OFFICER)
+  passwordHash        String            @map("password_hash")
+  locationId          Int?              @map("location_id")
+  isActive            Boolean           @default(true) @map("is_active")
+  failedLoginAttempts Int               @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?         @map("locked_until") @db.Timestamptz(6)
+  lastLogin           DateTime?         @map("last_login") @db.Timestamptz(6)
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  auditLogs           AuditLog[]
+  bills               ControlNumber[]
+  biometric           OfficerBiometric?
+  location            ParkingLocation?  @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("officers")
+}
+
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  officerId     Int?     @map("officer_id")
+  action        String
+  plateNumber   String   @default("") @map("plate_number")
+  controlNumber String   @default("") @map("control_number")
+  result        String   @default("")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String   @default("") @map("user_agent")
+  extra         Json     @default("{}")
+  timestamp     DateTime @default(now()) @db.Timestamptz(6)
+  officer       Officer? @relation(fields: [officerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([action, timestamp], map: "idx_audit_action_ts")
+  @@index([officerId, timestamp], map: "idx_audit_officer_ts")
+  @@map("audit_logs")
+}
+
+model ParkingLocation {
+  id             Int             @id @default(autoincrement())
+  name           String
+  region         String
+  district       String          @default("")
+  address        String          @default("")
+  latitude       Decimal?        @db.Decimal(10, 7)
+  longitude      Decimal?        @db.Decimal(10, 7)
+  feeMotorcycle  Decimal         @default(500) @map("fee_motorcycle") @db.Decimal(10, 2)
+  feePrivateCar  Decimal         @default(1000) @map("fee_private_car") @db.Decimal(10, 2)
+  feeMinibus     Decimal         @default(2000) @map("fee_minibus") @db.Decimal(10, 2)
+  feeBus         Decimal         @default(3000) @map("fee_bus") @db.Decimal(10, 2)
+  feeTruck       Decimal         @default(5000) @map("fee_truck") @db.Decimal(10, 2)
+  feeGovernment  Decimal         @default(0) @map("fee_government") @db.Decimal(10, 2)
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  controlNumbers ControlNumber[]
+  officers       Officer[]
+
+  @@map("parking_locations")
+}
+
+model Vehicle {
+  id               Int             @id @default(autoincrement())
+  plateNumber      String          @unique @map("plate_number")
+  ownerName        String          @map("owner_name")
+  ownerPhone       String          @map("owner_phone")
+  ownerEmail       String          @default("") @map("owner_email")
+  make             String          @default("")
+  model            String          @default("")
+  color            String          @default("")
+  year             Int?
+  category         VehicleCategory @default(PRIVATE_CAR)
+  registrationDate DateTime?       @map("registration_date") @db.Timestamptz(6)
+  isValid          Boolean         @default(true) @map("is_valid")
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  controlNumbers   ControlNumber[]
+
+  @@map("vehicles")
+}
+
+model ControlNumber {
+  id            Int              @id @default(autoincrement())
+  controlNumber String           @unique @map("control_number")
+  plateNumber   String           @map("plate_number")
+  vehicleId     Int?             @map("vehicle_id")
+  officerId     Int?             @map("officer_id")
+  locationId    Int?             @map("location_id")
+  amountDue     Decimal          @map("amount_due") @db.Decimal(10, 2)
+  generatedAt   DateTime         @default(now()) @map("generated_at") @db.Timestamptz(6)
+  expiresAt     DateTime         @map("expires_at") @db.Timestamptz(6)
+  status        BillStatus       @default(ACTIVE)
+  smsSent       Boolean          @default(false) @map("sms_sent")
+  emailSent     Boolean          @default(false) @map("email_sent")
+  smsError      String           @default("") @map("sms_error")
+  notes         String           @default("")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  location      ParkingLocation? @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  officer       Officer?         @relation(fields: [officerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([officerId, generatedAt], map: "idx_cn_officer_generated")
+  @@index([plateNumber, status, expiresAt], map: "idx_cn_plate_status_expires")
+  @@index([status, expiresAt], map: "idx_cn_status_expires")
+  @@map("control_numbers")
+}
+
+model BlacklistedToken {
+  id        Int      @id @default(autoincrement())
+  jti       String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("blacklisted_tokens")
+}
+
+model OfficerBiometric {
+  id         Int      @id @default(autoincrement())
+  officerId  Int      @unique @map("officer_id")
+  token      String   @unique @db.VarChar(128)
+  deviceHint String   @default("device") @map("device_hint") @db.VarChar(64)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  officer    Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("officer_biometrics")
+}
 
 enum OfficerRole {
   FIELD_OFFICER
@@ -33,158 +159,4 @@ enum BillStatus {
   ACTIVE
   EXPIRED
   PAID
-}
-
-// ── Officer ───────────────────────────────────────────────────────────────────
-
-model Officer {
-  id                  Int              @id @default(autoincrement())
-  employeeId          String           @unique @map("employee_id")
-  fullName            String           @map("full_name")
-  phone               String           @default("")
-  email               String           @default("")
-  role                OfficerRole      @default(FIELD_OFFICER)
-  passwordHash        String           @map("password_hash")
-  locationId          Int?             @map("location_id")
-  location            ParkingLocation? @relation(fields: [locationId], references: [id])
-  isActive            Boolean          @default(true)  @map("is_active")
-  failedLoginAttempts Int              @default(0)     @map("failed_login_attempts")
-  lockedUntil         DateTime?        @map("locked_until")
-  lastLogin           DateTime?        @map("last_login")
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt      @map("updated_at")
-
-  biometric   OfficerBiometric?
-  auditLogs AuditLog[]
-  bills     ControlNumber[]
-
-  @@map("officers")
-}
-
-// ── AuditLog ──────────────────────────────────────────────────────────────────
-
-model AuditLog {
-  id            Int      @id @default(autoincrement())
-  officerId     Int?     @map("officer_id")
-  officer       Officer? @relation(fields: [officerId], references: [id])
-  action        String
-  plateNumber   String   @default("") @map("plate_number")
-  controlNumber String   @default("") @map("control_number")
-  result        String   @default("")
-  ipAddress     String?  @map("ip_address")
-  userAgent     String   @default("") @map("user_agent")
-  extra         Json     @default("{}")
-  timestamp     DateTime @default(now())
-
-  @@index([officerId, timestamp])
-  @@index([action, timestamp])
-  @@map("audit_logs")
-}
-
-// ── ParkingLocation ───────────────────────────────────────────────────────────
-
-model ParkingLocation {
-  id            Int      @id @default(autoincrement())
-  name          String
-  region        String
-  district      String   @default("")
-  address       String   @default("")
-  latitude      Decimal? @db.Decimal(10, 7)
-  longitude     Decimal? @db.Decimal(10, 7)
-  feeMotorcycle Decimal  @default(500)  @db.Decimal(10, 2) @map("fee_motorcycle")
-  feePrivateCar Decimal  @default(1000) @db.Decimal(10, 2) @map("fee_private_car")
-  feeMinibus    Decimal  @default(2000) @db.Decimal(10, 2) @map("fee_minibus")
-  feeBus        Decimal  @default(3000) @db.Decimal(10, 2) @map("fee_bus")
-  feeTruck      Decimal  @default(5000) @db.Decimal(10, 2) @map("fee_truck")
-  feeGovernment Decimal  @default(0)    @db.Decimal(10, 2) @map("fee_government")
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt     @map("updated_at")
-
-  officers       Officer[]
-  controlNumbers ControlNumber[]
-
-  @@map("parking_locations")
-}
-
-// ── Vehicle ───────────────────────────────────────────────────────────────────
-
-model Vehicle {
-  id               Int             @id @default(autoincrement())
-  plateNumber      String          @unique @map("plate_number")
-  ownerName        String          @map("owner_name")
-  ownerPhone       String          @map("owner_phone")
-  ownerEmail       String          @default("") @map("owner_email")
-  make             String          @default("")
-  model            String          @default("")
-  color            String          @default("")
-  year             Int?
-  category         VehicleCategory @default(PRIVATE_CAR)
-  registrationDate DateTime?       @map("registration_date")
-  isValid          Boolean         @default(true) @map("is_valid")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt     @map("updated_at")
-
-  controlNumbers ControlNumber[]
-
-  @@map("vehicles")
-}
-
-// ── ControlNumber ─────────────────────────────────────────────────────────────
-
-model ControlNumber {
-  id            Int              @id @default(autoincrement())
-  controlNumber String           @unique @map("control_number")
-  plateNumber   String           @map("plate_number")
-  vehicleId     Int?             @map("vehicle_id")
-  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id])
-  officerId     Int?             @map("officer_id")
-  officer       Officer?         @relation(fields: [officerId], references: [id])
-  locationId    Int?             @map("location_id")
-  location      ParkingLocation? @relation(fields: [locationId], references: [id])
-  amountDue     Decimal          @db.Decimal(10, 2) @map("amount_due")
-  generatedAt   DateTime         @default(now()) @map("generated_at")
-  expiresAt     DateTime         @map("expires_at")
-  status        BillStatus       @default(ACTIVE)
-  smsSent       Boolean          @default(false) @map("sms_sent")
-  emailSent     Boolean          @default(false) @map("email_sent")
-  smsError      String           @default("")    @map("sms_error")
-  notes         String           @default("")
-  createdAt     DateTime         @default(now()) @map("created_at")
-
-  // Indexes critical for duplicate-prevention query performance
-  @@index([plateNumber, status, expiresAt])
-  @@index([officerId, generatedAt])
-  @@index([status, expiresAt])
-  @@map("control_numbers")
-}
-
-// ── BlacklistedToken (JWT refresh token blacklist) ────────────────────────────
-
-model BlacklistedToken {
-  id        Int      @id @default(autoincrement())
-  jti       String   @unique               // UUID from the token's jti claim
-  expiresAt DateTime @map("expires_at")    // Mirrors token exp — allows cleanup
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("blacklisted_tokens")
-}
-
-
-// ── OfficerBiometric ──────────────────────────────────────────────────────────
-// One row per officer. Stores the device-generated random token that is
-// exchanged for a JWT after local biometric verification passes on-device.
-// Real biometric templates never leave the device.
-
-model OfficerBiometric {
-  id          Int      @id @default(autoincrement())
-  officerId   Int      @unique  @map("officer_id")
-  officer     Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
-  token       String   @unique  // 64-char hex random
-  deviceHint  String   @default("device") @map("device_hint")
-  isActive    Boolean  @default(true)     @map("is_active")
-  createdAt   DateTime @default(now())    @map("created_at")
-  updatedAt   DateTime @updatedAt         @map("updated_at")
-
-  @@map("officer_biometrics")
 }
