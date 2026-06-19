@@ -1,12 +1,12 @@
 /**
- * ParkiPay — Login  (patch2: auto-dash, no footer, format guard)
+ * ParkiPay — Login  (patched: no footer, uppercase input, ID format validation)
  *
- * ID formats:
- *   Attendant   → TZ-XXXX   (TZ + dash auto-inserted + 4 digits)
- *   Supervisor  → SUP-XXXX  (SUP + dash auto-inserted + 4 digits)
+ * ID formats accepted:
+ *   Attendant   → TZ-XXXX   (e.g. TZ-8821)
+ *   Supervisor  → SUP-XXXX  (e.g. SUP-0042)
  *
- * The dash is inserted automatically when the user finishes typing
- * the prefix (TZ or SUP), so they only need to type numbers after.
+ * Any other format is rejected before hitting the backend.
+ * The backend still decides whether the user *exists* and has the correct role.
  */
 import { useState } from 'react';
 import {
@@ -22,40 +22,12 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { t } from '@/constants/i18n';
 import { Colors, SprintColors, Shadows } from '@/constants/theme';
 
-// Accepted final formats
+// Accepted ID patterns
 const ATTENDANT_RE  = /^TZ-\d{4}$/;
 const SUPERVISOR_RE = /^SUP-\d{4}$/;
 
 function isValidIdFormat(id: string): boolean {
   return ATTENDANT_RE.test(id) || SUPERVISOR_RE.test(id);
-}
-
-/**
- * Smart formatter: keeps only A-Z 0-9 and one dash,
- * auto-inserts the dash after the prefix (TZ or SUP).
- */
-function smartFormat(raw: string): string {
-  // Strip everything except letters, digits, dash; force uppercase
-  const clean = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-
-  // Never allow more than one dash
-  const parts = clean.split('-');
-  const prefix = parts[0];
-  const digits = parts.slice(1).join('').replace(/[^0-9]/g, '');
-
-  // Auto-insert dash once prefix matches TZ or SUP
-  if ((prefix === 'TZ' || prefix === 'SUP') && parts.length === 1) {
-    // User just finished typing the prefix with no dash yet — add it
-    return prefix + '-';
-  }
-
-  if (parts.length >= 2) {
-    // Has a dash — reconstruct cleanly: PREFIX-DIGITS (max 4 digits)
-    return prefix + '-' + digits.slice(0, 4);
-  }
-
-  // Still typing prefix (< 3 chars), just return cleaned prefix
-  return prefix.slice(0, 3);
 }
 
 export default function LoginScreen() {
@@ -68,10 +40,13 @@ export default function LoginScreen() {
 
   const errMsg = localError ?? error?.message ?? null;
 
+  // Keep input forced to uppercase and auto-insert the dash
   const handleChangeText = (raw: string) => {
     setLocalError(null);
     clearError();
-    setEmployeeId(smartFormat(raw));
+    // Strip everything that isn't alphanumeric or a dash, force uppercase
+    const upper = raw.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    setEmployeeId(upper);
   };
 
   const handleLogin = async () => {
@@ -93,7 +68,7 @@ export default function LoginScreen() {
     }
 
     const result = await loginById(id);
-    if (!result.success) return;
+    if (!result.success) return;   // error already set in useAuth
 
     if (result.role === 'SUPERVISOR' || result.role === 'ADMIN') {
       router.replace('/(app)/admin');
@@ -142,7 +117,7 @@ export default function LoginScreen() {
               onChangeText={handleChangeText}
               placeholder="TZ-XXXX  or  SUP-XXXX"
               placeholderTextColor="#9CA3AF"
-              autoCapitalize="characters"
+              autoCapitalize="characters"   // keyboard hint
               autoCorrect={false}
               returnKeyType="done"
               onSubmitEditing={handleLogin}
@@ -155,7 +130,7 @@ export default function LoginScreen() {
             Attendants: TZ-XXXX · Supervisors: SUP-XXXX
           </Text>
 
-          {/* Error */}
+          {/* Error message */}
           {errMsg ? (
             <View style={styles.errBox}>
               <Ionicons name="alert-circle-outline" size={15} color={Colors.error} />
@@ -179,7 +154,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Footer intentionally removed */}
+        {/* Footer removed as per patch fix 2 */}
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -187,33 +162,33 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: Colors.backgroundSecondary },
-  scroll:     { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40, justifyContent: 'center' },
-  header:     { alignItems: 'center', paddingTop: 60, paddingBottom: 28 },
-  accent:     { width: 180, height: 4, borderRadius: 2, marginBottom: 16 },
-  logo:       { fontSize: 36, fontWeight: '900', letterSpacing: 1 },
-  sub1:       { fontSize: 13, color: '#404040', marginTop: 4 },
-  sub2:       { fontSize: 13, color: '#737373' },
-  card:       { backgroundColor: '#fff', borderRadius: 16, padding: 24, ...Shadows.md },
-  title:      { fontSize: 28, fontWeight: '800', textAlign: 'center', color: '#1A1A1A', marginBottom: 4 },
-  subtitle:   { fontSize: 13, color: '#595959', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  label:      { fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 6 },
-  inputRow:   {
+  root:        { flex: 1, backgroundColor: Colors.backgroundSecondary },
+  scroll:      { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40, justifyContent: 'center' },
+  header:      { alignItems: 'center', paddingTop: 60, paddingBottom: 28 },
+  accent:      { width: 180, height: 4, borderRadius: 2, marginBottom: 16 },
+  logo:        { fontSize: 36, fontWeight: '900', letterSpacing: 1 },
+  sub1:        { fontSize: 13, color: '#404040', marginTop: 4 },
+  sub2:        { fontSize: 13, color: '#737373' },
+  card:        { backgroundColor: '#fff', borderRadius: 16, padding: 24, ...Shadows.md },
+  title:       { fontSize: 28, fontWeight: '800', textAlign: 'center', color: '#1A1A1A', marginBottom: 4 },
+  subtitle:    { fontSize: 13, color: '#595959', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  label:       { fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 6 },
+  inputRow:    {
     flexDirection: 'row', alignItems: 'center', height: 54,
     borderWidth: 1.5, borderColor: '#D1D5DB', borderRadius: 12, backgroundColor: '#fff',
   },
-  inputErr:   { borderColor: Colors.error },
-  input:      { flex: 1, fontSize: 15, color: '#1A1A1A', paddingHorizontal: 10 },
-  formatHint: { fontSize: 11, color: '#9CA3AF', marginTop: 5, marginBottom: 2 },
-  errBox:     {
+  inputErr:    { borderColor: Colors.error },
+  input:       { flex: 1, fontSize: 15, color: '#1A1A1A', paddingHorizontal: 10 },
+  formatHint:  { fontSize: 11, color: '#9CA3AF', marginTop: 5, marginBottom: 2 },
+  errBox:      {
     flexDirection: 'row', alignItems: 'flex-start', gap: 6,
     backgroundColor: Colors.errorSurface, borderRadius: 10, padding: 10,
     marginTop: 8, borderLeftWidth: 3, borderLeftColor: Colors.error,
   },
-  errText:    { fontSize: 13, color: Colors.error, flex: 1, lineHeight: 18 },
-  btn:        {
+  errText:     { fontSize: 13, color: Colors.error, flex: 1, lineHeight: 18 },
+  btn:         {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     height: 56, backgroundColor: '#0D1117', borderRadius: 12, marginTop: 20,
   },
-  btnText:    { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
+  btnText:     { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
 });

@@ -1,14 +1,12 @@
 /**
- * ParkiPay — Vehicle Lookup Screen  (patch2)
+ * ParkiPay — Vehicle Lookup Screen  (patched)
  *
- * Changes vs patch1:
- *  • While typing: red border immediately if characters violate the
- *    allowed pattern — no card, no text error shown mid-typing.
- *  • On VERIFY with invalid format: shake + red border (no card).
- *  • On VERIFY with valid format but plate not in DB: Alert popup
- *    "Enter Valid vehicle Plate Number" → OK closes it, user retypes.
- *  • "Not in Registry" red card fully removed.
- *  • Camera and refresh icon already removed in patch1 (kept removed).
+ * Changes vs original:
+ *  • Camera functionality removed (no expo-image-picker, no OCR)
+ *  • Refresh icon removed from header
+ *  • Plate format validated before API call (pattern: T NNN AAA)
+ *  • "Not in Registry" path no longer allows anonymous bill generation;
+ *    instead it shows a clear error message and blocks the action.
  */
 import { useState, useRef, useCallback } from 'react';
 import {
@@ -43,25 +41,10 @@ import {
   pushBillSuccess, pushDuplicateAlert, pushBillFailed,
 } from '@/services/alertsService';
 
-// ── Plate helpers ──────────────────────────────────────────────────────────
-// Tanzania: T + 3 digits + 3 uppercase letters  → e.g. T000AAA
+// ── Plate format helper ────────────────────────────────────────────────────
+// Tanzania standard: T followed by 3 digits, then 3 uppercase letters
+// e.g. T 000 AAA → normalised T000AAA
 const PLATE_RE = /^T\d{3}[A-Z]{3}$/;
-
-// Allowed characters at each position while typing (7 chars max, no spaces stored)
-// pos 0 : T
-// pos 1-3: digits
-// pos 4-6: letters
-function isPartialValid(raw: string): boolean {
-  if (raw.length === 0) return true;
-  if (raw[0] !== 'T') return false;
-  for (let i = 1; i < Math.min(raw.length, 4); i++) {
-    if (!/\d/.test(raw[i])) return false;
-  }
-  for (let i = 4; i < raw.length; i++) {
-    if (!/[A-Z]/.test(raw[i])) return false;
-  }
-  return true;
-}
 
 function formatPlate(raw: string): string {
   const s = raw.replace(/\s/g, '');
@@ -70,7 +53,7 @@ function formatPlate(raw: string): string {
   return s[0] + ' ' + s.slice(1, 4) + ' ' + s.slice(4);
 }
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface VehicleInfo {
   id: number; plateNumber: string; ownerName: string;
   ownerPhone: string; make?: string; model?: string; category?: string;
@@ -82,26 +65,24 @@ interface ActiveBill {
 }
 interface GeneratedBill { controlNumber: string; amountDue: number; }
 type LookupState =
-  | 'idle' | 'loading' | 'found'
-  | 'duplicate' | 'generating' | 'success';
+  | 'idle' | 'loading' | 'found' | 'not_found'
+  | 'duplicate' | 'generating' | 'success' | 'invalid_format';
 
-// ── Component ──────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function LookupScreen() {
   const { officer }  = useAuthStore();
   const { theme }    = useSettingsStore();
   const C            = palette(theme);
   const S            = makeStyles(C);
 
-  const [plateRaw,    setPlateRaw]    = useState('');
+  const [plateRaw,    setPlateRaw]    = useState<string>('');
   const [lookupState, setLookupState] = useState<LookupState>('idle');
   const [vehicle,     setVehicle]     = useState<VehicleInfo | null>(null);
   const [activeBill,  setActiveBill]  = useState<ActiveBill | null>(null);
   const [genBill,     setGenBill]     = useState<GeneratedBill | null>(null);
-  const [cnCopied,    setCnCopied]    = useState(false);
+  const [cnCopied,    setCnCopied]    = useState<boolean>(false);
   const [allowedAfter, setAllowedAfter] = useState<string | null>(null);
-
-  // Real-time format error (red border only while typing)
-  const [borderError, setBorderError] = useState(false);
+  const [formatError, setFormatError] = useState<string | null>(null);
 
   const [showDupModal,        setShowDupModal]        = useState(false);
   const [showSuccessModal,    setShowSuccessModal]     = useState(false);
@@ -121,29 +102,20 @@ export default function LookupScreen() {
 
   const normalisePlate = (raw: string) => raw.trim().toUpperCase().replace(/\s/g, '');
 
-  // ── Handle text change: real-time border feedback ────────────────────────
-  const handlePlateChange = (text: string) => {
-    // Strip spaces, force uppercase, keep only T/digit/letter chars
-    const raw = text.replace(/\s/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
-    setPlateRaw(raw);
-    if (lookupState !== 'idle') setLookupState('idle');
-    // Show red border if partial entry is already invalid
-    setBorderError(raw.length > 0 && !isPartialValid(raw));
-  };
-
-  // ── Verify ───────────────────────────────────────────────────────────────
+  // ── Verify (lookup) ──────────────────────────────────────────────────────
   const handleVerify = async () => {
     Keyboard.dismiss();
+    setFormatError(null);
     const plate = normalisePlate(plateRaw);
 
-    // Guard: invalid format
+    // Fix 5a: validate format before calling the API
     if (!PLATE_RE.test(plate)) {
       shake();
-      setBorderError(true);
-      return;  // no card, no text — just red border + shake
+      setFormatError('Please enter a valid plate number format (e.g. T 000 AAA).');
+      setLookupState('invalid_format');
+      return;
     }
 
-    setBorderError(false);
     setLookupState('loading');
     setVehicle(null);
     setActiveBill(null);
@@ -178,16 +150,10 @@ export default function LookupScreen() {
         setLookupState('found');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        // Valid format but NOT in database → Alert popup only, no card
-        setLookupState('idle');
+        // Fix 5b: plate not in database → show error, do NOT allow anonymous bill
+        setLookupState('not_found');
         shake();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(
-          'Vehicle Not Found',
-          'Enter Valid vehicle Plate Number',
-          [{ text: 'OK', onPress: () => { setPlateRaw(''); setBorderError(false); } }],
-          { cancelable: false }
-        );
       }
     } catch {
       setLookupState('idle');
@@ -195,7 +161,7 @@ export default function LookupScreen() {
     }
   };
 
-  // ── Generate bill ─────────────────────────────────────────────────────────
+  // ── Generate bill ────────────────────────────────────────────────────────
   const handleGenerateBill = useCallback(async () => {
     setShowGenerateConfirm(false);
     if (!officer?.locationId) return;
@@ -230,12 +196,12 @@ export default function LookupScreen() {
       } else {
         const reason = err?.response?.data?.detail ?? 'Unknown error';
         pushBillFailed({ plateNumber: normalisePlate(plateRaw), reason });
-        setLookupState(vehicle !== null ? 'found' : 'idle');
+        setLookupState(vehicle !== null ? 'found' : 'not_found');
       }
     }
   }, [officer, plateRaw, vehicle]);
 
-  // ── Copy CN ───────────────────────────────────────────────────────────────
+  // ── Copy CN ──────────────────────────────────────────────────────────────
   const copyControlNumber = async () => {
     if (!genBill?.controlNumber) return;
     await ExpoClipboard.setStringAsync(genBill.controlNumber);
@@ -244,17 +210,18 @@ export default function LookupScreen() {
     setTimeout(() => setCnCopied(false), 3000);
   };
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  // ── Reset ────────────────────────────────────────────────────────────────
   const reset = () => {
     setPlateRaw(''); setVehicle(null); setActiveBill(null);
     setGenBill(null); setLookupState('idle'); setCnCopied(false);
-    setAllowedAfter(null); setBorderError(false);
+    setAllowedAfter(null); setFormatError(null);
     setShowDupModal(false); setShowSuccessModal(false); setShowGenerateConfirm(false);
   };
 
-  const topOffset  = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
+  const topOffset = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
   const isLoading  = lookupState === 'loading' || lookupState === 'generating';
   const plate      = normalisePlate(plateRaw);
+  const isInvalidFormat = lookupState === 'invalid_format';
 
   const allowedAfterStr = allowedAfter
     ? new Date(allowedAfter).toLocaleTimeString('en-TZ', {
@@ -265,7 +232,7 @@ export default function LookupScreen() {
   return (
     <SafeAreaView style={[S.root, { backgroundColor: C.bg, paddingTop: topOffset }]}>
 
-      {/* Header — no refresh icon */}
+      {/* Header — Fix 4: refresh icon removed */}
       <View style={[S.header, { backgroundColor: C.headerBg }]}>
         <TouchableOpacity onPress={() => router.back()} style={S.iconBtn}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -274,7 +241,7 @@ export default function LookupScreen() {
           <Text style={S.headerTitle}>Vehicle Lookup</Text>
           <Text style={S.headerSub}>Enter plate number to verify</Text>
         </View>
-        {/* Spacer keeps title centred */}
+        {/* Spacer to keep title centred (same width as back button) */}
         <View style={S.iconBtn} />
       </View>
 
@@ -288,8 +255,7 @@ export default function LookupScreen() {
           {
             transform: [{ translateX: shakeAnim }],
             backgroundColor: C.card,
-            // Red border: either real-time format mismatch OR post-verify invalid
-            borderColor: borderError ? '#EF4444' : C.border,
+            borderColor: isInvalidFormat ? '#EF4444' : C.border,
           },
         ]}>
           <MaterialCommunityIcons name="car-outline" size={22} color={C.textMuted}
@@ -297,28 +263,36 @@ export default function LookupScreen() {
           <TextInput
             style={[S.plateInput, { color: C.text, flex: 1 }]}
             value={formatPlate(plateRaw)}
-            onChangeText={handlePlateChange}
+            onChangeText={text => {
+              const clean = text.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 7);
+              setPlateRaw(clean);
+              setFormatError(null);
+              if (lookupState !== 'idle') setLookupState('idle');
+            }}
             placeholder="T 000 AAA"
             placeholderTextColor={C.textMuted}
             autoCapitalize="characters"
             autoCorrect={false}
             returnKeyType="search"
             onSubmitEditing={handleVerify}
-            maxLength={9}   // "T 000 AAA" = 9 chars with spaces
+            maxLength={9}
           />
           {plateRaw.length > 0 && (
-            <TouchableOpacity onPress={() => { setPlateRaw(''); setBorderError(false); setLookupState('idle'); }}>
+            <TouchableOpacity onPress={() => { setPlateRaw(''); setLookupState('idle'); setFormatError(null); }}>
               <Ionicons name="close-circle" size={20} color={C.textMuted} />
             </TouchableOpacity>
           )}
         </Animated.View>
 
-        {/* Subtle format hint — always visible */}
-        <Text style={[S.hintText, { color: borderError ? '#EF4444' : C.textMuted }]}>
-          Format: T + 3 digits + 3 letters  (e.g. T 566 GHH)
-        </Text>
+        {/* Fix 5a: format error shown inline with red highlight */}
+        {formatError && (
+          <View style={S.formatErrBox}>
+            <Ionicons name="alert-circle-outline" size={15} color="#EF4444" />
+            <Text style={S.formatErrText}>{formatError}</Text>
+          </View>
+        )}
 
-        {/* Verify button — full width, no camera button */}
+        {/* Verify button — Fix 4: camera button removed */}
         <TouchableOpacity
           style={[S.verifyBtn, (isLoading || plate.length < 7) && { opacity: 0.6 }]}
           onPress={handleVerify}
@@ -336,6 +310,8 @@ export default function LookupScreen() {
             }
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Fix 4: scan hint removed */}
 
         {/* Vehicle Found Card */}
         {lookupState === 'found' && vehicle !== null && (
@@ -373,6 +349,36 @@ export default function LookupScreen() {
                 <Text style={S.genBtnText}>Generate Bill</Text>
               </LinearGradient>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Fix 5b: Not in Registry → error card, NO anonymous bill button */}
+        {lookupState === 'not_found' && (
+          <View style={[S.resultCard, { backgroundColor: C.card, borderColor: '#EF4444' }]}>
+            <View style={S.resultHeaderRow}>
+              <View style={[S.resultIconBg, { backgroundColor: 'rgba(239,68,68,0.1)' }]}>
+                <MaterialCommunityIcons name="car-off" size={22} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[S.resultTitle, { color: C.text }]}>Not in Registry</Text>
+                <Text style={[S.resultSub, { color: '#EF4444' }]}>
+                  Please enter a valid plate number registered in the system.
+                </Text>
+              </View>
+            </View>
+            <View style={[S.plateTag, { borderColor: '#EF4444', alignSelf: 'center', marginVertical: 12 }]}>
+              <Text style={[S.plateTagText, { fontSize: 22, color: '#EF4444' }]}>
+                {formatPlate(plateRaw)}
+              </Text>
+            </View>
+            {/* No generate button — anonymous bills are not allowed */}
+            <View style={S.notFoundNote}>
+              <Ionicons name="information-circle-outline" size={16} color="#EF4444" />
+              <Text style={[S.notFoundNoteText, { color: '#EF4444' }]}>
+                Only vehicles registered in ParkiPay can receive a parking bill.
+                Ask your supervisor to register the vehicle first.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -490,22 +496,27 @@ export default function LookupScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 function makeStyles(C: ReturnType<typeof palette>) {
   return StyleSheet.create({
-    root:        { flex: 1 },
-    header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-    iconBtn:     { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
-    headerTitle: { fontSize: 17, fontWeight: '800', color: '#fff' },
-    headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.6)', textAlign: 'center' },
-    body:        { padding: 16, paddingBottom: 32 },
-    inputLabel:  { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 },
-    inputRow:    { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderRadius: 14, paddingHorizontal: 14, height: 60, marginBottom: 4 },
-    plateInput:  { fontSize: 24, fontWeight: '800', letterSpacing: 4 },
-    hintText:    { fontSize: 11, marginBottom: 12 },
-    verifyBtn:   { borderRadius: 14, overflow: 'hidden', marginBottom: 16,
+    root:       { flex: 1 },
+    header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
+    iconBtn:    { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+    headerTitle:{ fontSize: 17, fontWeight: '800', color: '#fff' },
+    headerSub:  { fontSize: 11, color: 'rgba(255,255,255,0.6)', textAlign: 'center' },
+    body:       { padding: 16, paddingBottom: 32 },
+    inputLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, color: C.textSub },
+    inputRow:   { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderRadius: 14, paddingHorizontal: 14, height: 60, marginBottom: 6 },
+    plateInput: { fontSize: 24, fontWeight: '800', letterSpacing: 4 },
+    formatErrBox: {
+      flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+      backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 10, padding: 10,
+      marginBottom: 10, borderLeftWidth: 3, borderLeftColor: '#EF4444',
+    },
+    formatErrText: { fontSize: 13, color: '#EF4444', flex: 1, lineHeight: 18 },
+    verifyBtn:  { borderRadius: 14, overflow: 'hidden', marginBottom: 16,
       shadowColor: SprintColors.green, shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 },
-    verifyGrad:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52 },
-    verifyText:  { color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 0.8 },
-    // Vehicle found card
+    verifyGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52 },
+    verifyText: { color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 0.8 },
+    // Result cards
     resultCard:      { borderRadius: 16, borderWidth: 2, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
     resultHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
     resultIconBg:    { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
@@ -519,39 +530,41 @@ function makeStyles(C: ReturnType<typeof palette>) {
     genBtn:          { borderRadius: 12, overflow: 'hidden', marginTop: 14, shadowColor: SprintColors.green, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
     genBtnGrad:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 50 },
     genBtnText:      { color: '#fff', fontSize: 15, fontWeight: '900' },
+    notFoundNote:    { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.06)', borderLeftWidth: 3, borderLeftColor: '#EF4444', alignItems: 'flex-start' },
+    notFoundNoteText:{ flex: 1, fontSize: 12, lineHeight: 18 },
     // Duplicate modal
-    modalBackdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalSheet:      { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
-    dupIconWrap:     { width: 60, height: 60, borderRadius: 18, backgroundColor: 'rgba(252,209,22,0.15)', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 12 },
-    modalTitle:      { fontSize: 19, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
-    modalSub:        { fontSize: 13, textAlign: 'center', marginBottom: 14 },
-    cooldownBox:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, borderWidth: 1.5, marginBottom: 14 },
-    cooldownTitle:   { fontSize: 12, fontWeight: '600', marginBottom: 2 },
-    cooldownTime:    { fontSize: 16, fontWeight: '900' },
-    dupCard:         { borderWidth: 2, borderRadius: 14, padding: 14, marginBottom: 14, backgroundColor: 'rgba(252,209,22,0.04)' },
-    dupCardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+    modalSheet:    { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
+    dupIconWrap:   { width: 60, height: 60, borderRadius: 18, backgroundColor: 'rgba(252,209,22,0.15)', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 12 },
+    modalTitle:    { fontSize: 19, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
+    modalSub:      { fontSize: 13, textAlign: 'center', marginBottom: 14 },
+    cooldownBox:   { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, borderWidth: 1.5, marginBottom: 14 },
+    cooldownTitle: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
+    cooldownTime:  { fontSize: 16, fontWeight: '900' },
+    dupCard:       { borderWidth: 2, borderRadius: 14, padding: 14, marginBottom: 14, backgroundColor: 'rgba(252,209,22,0.04)' },
+    dupCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     dupCardHeaderText: { fontSize: 10, fontWeight: '800', color: '#C9A800', letterSpacing: 1, textTransform: 'uppercase' },
-    liveBadge:       { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#C9A800', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-    liveDot:         { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
-    liveBadgeText:   { color: '#fff', fontSize: 10, fontWeight: '800' },
-    dupRow:          { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1 },
-    dupLabel:        { fontSize: 11, fontWeight: '600' },
-    dupValue:        { fontSize: 11, fontWeight: '700', maxWidth: '60%', textAlign: 'right' },
-    closeSheetBtn:   { height: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-    closeSheetText:  { fontWeight: '600', fontSize: 14 },
+    liveBadge:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#C9A800', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    liveDot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+    liveBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+    dupRow:        { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: 1 },
+    dupLabel:      { fontSize: 11, fontWeight: '600' },
+    dupValue:      { fontSize: 11, fontWeight: '700', maxWidth: '60%', textAlign: 'right' },
+    closeSheetBtn: { height: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    closeSheetText:{ fontWeight: '600', fontSize: 14 },
     // Success
     successBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 },
     successCard:     { width: '100%', borderRadius: 24, padding: 26, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 12 },
     successIconWrap: { width: 76, height: 76, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
     successTitle:    { fontSize: 21, fontWeight: '900', marginBottom: 8 },
     successSub:      { fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 18 },
-    cnBox:    { width: '100%', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 18 },
-    cnLabel:  { fontSize: 10, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 },
-    cnRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-    cnVal:    { fontSize: 22, fontWeight: '900', letterSpacing: 3 },
-    copyBtn:  { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    cnAmt:    { fontSize: 19, fontWeight: '800' },
-    doneBtn:  { width: '100%', height: 50, borderRadius: 12, backgroundColor: SprintColors.green, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+    cnBox:  { width: '100%', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 18 },
+    cnLabel:{ fontSize: 10, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 },
+    cnRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+    cnVal:  { fontSize: 22, fontWeight: '900', letterSpacing: 3 },
+    copyBtn:{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    cnAmt:  { fontSize: 19, fontWeight: '800' },
+    doneBtn:{ width: '100%', height: 50, borderRadius: 12, backgroundColor: SprintColors.green, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     doneBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
     backText:    { fontSize: 13, fontWeight: '600' },
   });

@@ -220,8 +220,9 @@ export default function HomeScreen() {
           <Text style={[S.topLogo, { color: SprintColors.green }]}>Parki</Text>
           <Text style={[S.topLogo, { color: SprintColors.yellow }]}>Pay</Text>
         </View>
-        {/* refresh icon removed — pull-to-refresh on scroll still works */}
-        <View style={S.iconBtn} />
+        <TouchableOpacity style={S.iconBtn} onPress={loadData}>
+          <Ionicons name="refresh-outline" size={22} color={C.headerText} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={[S.body, { backgroundColor: C.bg }]}
