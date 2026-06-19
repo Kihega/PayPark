@@ -1,12 +1,13 @@
-datasource db {
-  provider = "postgresql"
-  url = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
-
 generator client {
   provider = "prisma-client-js"
 }
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
 model Officer {
   id                  Int               @id @default(autoincrement())
   employeeId          String            @unique @map("employee_id")
@@ -18,14 +19,14 @@ model Officer {
   locationId          Int?              @map("location_id")
   isActive            Boolean           @default(true) @map("is_active")
   failedLoginAttempts Int               @default(0) @map("failed_login_attempts")
-  lockedUntil         DateTime?         @map("locked_until") @db.Timestamptz(6)
-  lastLogin           DateTime?         @map("last_login") @db.Timestamptz(6)
-  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lockedUntil         DateTime?         @map("locked_until")
+  lastLogin           DateTime?         @map("last_login")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
   auditLogs           AuditLog[]
   bills               ControlNumber[]
   biometric           OfficerBiometric?
-  location            ParkingLocation?  @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  location            ParkingLocation?  @relation(fields: [locationId], references: [id])
 
   @@map("officers")
 }
@@ -40,11 +41,11 @@ model AuditLog {
   ipAddress     String?  @map("ip_address")
   userAgent     String   @default("") @map("user_agent")
   extra         Json     @default("{}")
-  timestamp     DateTime @default(now()) @db.Timestamptz(6)
-  officer       Officer? @relation(fields: [officerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  timestamp     DateTime @default(now())
+  officer       Officer? @relation(fields: [officerId], references: [id])
 
-  @@index([action, timestamp], map: "idx_audit_action_ts")
-  @@index([officerId, timestamp], map: "idx_audit_officer_ts")
+  @@index([action, timestamp])
+  @@index([officerId, timestamp])
   @@map("audit_logs")
 }
 
@@ -63,8 +64,8 @@ model ParkingLocation {
   feeTruck       Decimal         @default(5000) @map("fee_truck") @db.Decimal(10, 2)
   feeGovernment  Decimal         @default(0) @map("fee_government") @db.Decimal(10, 2)
   isActive       Boolean         @default(true) @map("is_active")
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
   controlNumbers ControlNumber[]
   officers       Officer[]
 
@@ -82,10 +83,10 @@ model Vehicle {
   color            String          @default("")
   year             Int?
   category         VehicleCategory @default(PRIVATE_CAR)
-  registrationDate DateTime?       @map("registration_date") @db.Timestamptz(6)
+  registrationDate DateTime?       @map("registration_date")
   isValid          Boolean         @default(true) @map("is_valid")
-  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
   controlNumbers   ControlNumber[]
 
   @@map("vehicles")
@@ -99,29 +100,29 @@ model ControlNumber {
   officerId     Int?             @map("officer_id")
   locationId    Int?             @map("location_id")
   amountDue     Decimal          @map("amount_due") @db.Decimal(10, 2)
-  generatedAt   DateTime         @default(now()) @map("generated_at") @db.Timestamptz(6)
-  expiresAt     DateTime         @map("expires_at") @db.Timestamptz(6)
+  generatedAt   DateTime         @default(now()) @map("generated_at")
+  expiresAt     DateTime         @map("expires_at")
   status        BillStatus       @default(ACTIVE)
   smsSent       Boolean          @default(false) @map("sms_sent")
   emailSent     Boolean          @default(false) @map("email_sent")
   smsError      String           @default("") @map("sms_error")
   notes         String           @default("")
-  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  location      ParkingLocation? @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  officer       Officer?         @relation(fields: [officerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt     DateTime         @default(now()) @map("created_at")
+  location      ParkingLocation? @relation(fields: [locationId], references: [id])
+  officer       Officer?         @relation(fields: [officerId], references: [id])
+  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id])
 
-  @@index([officerId, generatedAt], map: "idx_cn_officer_generated")
-  @@index([plateNumber, status, expiresAt], map: "idx_cn_plate_status_expires")
-  @@index([status, expiresAt], map: "idx_cn_status_expires")
+  @@index([officerId, generatedAt])
+  @@index([plateNumber, status, expiresAt])
+  @@index([status, expiresAt])
   @@map("control_numbers")
 }
 
 model BlacklistedToken {
   id        Int      @id @default(autoincrement())
   jti       String   @unique
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("blacklisted_tokens")
 }
@@ -139,6 +140,12 @@ model OfficerBiometric {
   @@map("officer_biometrics")
 }
 
+enum BillStatus {
+  ACTIVE
+  EXPIRED
+  PAID
+}
+
 enum OfficerRole {
   FIELD_OFFICER
   SUPERVISOR
@@ -152,10 +159,4 @@ enum VehicleCategory {
   BUS
   TRUCK
   GOVERNMENT
-}
-
-enum BillStatus {
-  ACTIVE
-  EXPIRED
-  PAID
 }
