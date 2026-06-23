@@ -95,7 +95,7 @@ export default function LoginScreen() {
     const result = await loginById(id);
     if (!result.success) return;
 
-    if (result.role === 'SUPERVISOR' || result.role === 'ADMIN') {
+    if (result.role === 'SUPERVISOR') {
       router.replace('/(app)/admin');
     } else {
       router.replace('/(app)/home');

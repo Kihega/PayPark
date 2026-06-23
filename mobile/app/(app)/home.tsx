@@ -111,7 +111,7 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={S.sbName} numberOfLines={1}>{officer.fullName}</Text>
-                <Text style={S.sbRole}>{officer.role === 'FIELD_OFFICER' ? tr('fieldOfficer') : tr('supervisor')}</Text>
+                <Text style={S.sbRole}>{officer.role === 'ATTENDANT' ? tr('fieldOfficer') : tr('supervisor')}</Text>
               </View>
               <TouchableOpacity onPress={closeSidebar}>
                 <Ionicons name="close" size={22} color="#9CA3AF" />

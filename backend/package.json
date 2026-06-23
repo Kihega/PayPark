@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=20.0.0"
   },
+                                      "prisma": {
+  "seed": "node prisma/seed.js"
+},
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",

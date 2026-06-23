@@ -18,7 +18,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (isLoading) return;
     if (isAuthenticated && officer) {
-      const isAdmin = officer.role === 'SUPERVISOR' || officer.role === 'ADMIN';
+      const isAdmin = officer.role === 'SUPERVISOR';
       router.replace(isAdmin ? '/(app)/admin' : '/(app)/home');
     } else {
       router.replace('/(auth)/login');

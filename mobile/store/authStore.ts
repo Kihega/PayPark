@@ -10,7 +10,7 @@ export interface OfficerProfile {
   fullName: string;
   phone: string;
   email: string;
-  role: 'FIELD_OFFICER' | 'SUPERVISOR' | 'ADMIN';
+  role: 'ATTENDANT' | 'SUPERVISOR';
   locationId: number | null;
   locationName: string | null;
   isActive: boolean;
