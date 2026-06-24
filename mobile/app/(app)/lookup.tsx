@@ -457,8 +457,15 @@ export default function LookupScreen() {
             <Text style={[S.successTitle, { color: C.text }]}>Bill Generated!</Text>
             <Text style={[S.successSub,   { color: C.textSub }]}>
               Parking bill issued successfully.
-              {vehicle?.ownerPhone ? ' SMS sent to owner.' : ''}
             </Text>
+            {!!vehicle?.ownerPhone && (
+              <View style={S.smsNoteRow}>
+                <Ionicons name="information-circle-outline" size={16} color={SprintColors.green} />
+                <Text style={[S.smsNoteText, { color: C.textSub }]}>
+                  An SMS confirmation has been sent to the owner&apos;s phone number.
+                </Text>
+              </View>
+            )}
             <View style={[S.cnBox, { backgroundColor: C.bg }]}>
               <Text style={[S.cnLabel, { color: C.textSub }]}>CONTROL NUMBER</Text>
               <View style={S.cnRow}>
@@ -545,6 +552,10 @@ function makeStyles(C: ReturnType<typeof palette>) {
     successIconWrap: { width: 76, height: 76, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
     successTitle:    { fontSize: 21, fontWeight: '900', marginBottom: 8 },
     successSub:      { fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 18 },
+    smsNoteRow:      { flexDirection: 'row', gap: 8, padding: 10, borderRadius: 10,
+      backgroundColor: 'rgba(30,181,58,0.06)', borderLeftWidth: 3,
+      borderLeftColor: SprintColors.green, marginBottom: 18, alignItems: 'flex-start', width: '100%' },
+    smsNoteText:     { flex: 1, fontSize: 12, lineHeight: 17 },
     cnBox:    { width: '100%', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 18 },
     cnLabel:  { fontSize: 10, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 },
     cnRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },

@@ -44,6 +44,37 @@ function formatPlate(raw: string): string {
   return s[0] + ' ' + s.slice(1, 4) + ' ' + s.slice(4);
 }
 
+// ── Full-name formatting (shared pattern: title-case + 3-name check) ───────
+// Auto-capitalizes each word as the user types, e.g. "juma ally hassan"
+// -> "Juma Ally Hassan". Does not trim while typing (so trailing spaces
+// while the user is still composing a word are preserved).
+function formatFullName(raw: string): string {
+  return raw.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// True only when the trimmed name has exactly 3 space-separated parts
+// (first, middle, surname) and none of them are empty.
+function isThreeNames(raw: string): boolean {
+  const parts = raw.trim().split(/\s+/).filter(Boolean);
+  return parts.length === 3;
+}
+
+// ── Plate helpers (matches attendant Vehicle Lookup screen exactly) ────────
+// Tanzania: T + 3 digits + 3 uppercase letters  -> e.g. T000AAA
+const PLATE_RE = /^T\d{3}[A-Z]{3}$/;
+
+function isPartialPlateValid(raw: string): boolean {
+  if (raw.length === 0) return true;
+  if (raw[0] !== 'T') return false;
+  for (let i = 1; i < Math.min(raw.length, 4); i++) {
+    if (!/\d/.test(raw[i])) return false;
+  }
+  for (let i = 4; i < raw.length; i++) {
+    if (!/[A-Z]/.test(raw[i])) return false;
+  }
+  return true;
+}
+
 export default function VehiclesScreen() {
   const { theme } = useSettingsStore();
   const C = palette(theme);
@@ -60,6 +91,8 @@ export default function VehiclesScreen() {
   const [fOwnerName,  setFOwnerName]  = useState('');
   const [fPhone,      setFPhone]      = useState('');
   const [fPlate,      setFPlate]      = useState('');
+  const [nameError,   setNameError]   = useState(false);
+  const [plateError,  setPlateError]  = useState(false);
   const [fMake,       setFMake]       = useState('');
   const [fModel,      setFModel]      = useState('');
   const [fCategory,   setFCategory]   = useState('PRIVATE_CAR');
@@ -78,24 +111,36 @@ export default function VehiclesScreen() {
   const resetForm = () => {
     setFOwnerName(''); setFPhone(''); setFPlate('');
     setFMake(''); setFModel(''); setFCategory('PRIVATE_CAR');
+    setNameError(false); setPlateError(false);
   };
 
   const handleRegister = async () => {
     if (!fOwnerName.trim() || !fPhone.trim() || !fPlate.trim()) {
       Alert.alert('', 'Owner name, phone and plate number are required.'); return;
     }
+    if (!isThreeNames(fOwnerName)) {
+      setNameError(true);
+      Alert.alert('', 'Enter the owner\'s full name as three names: first, middle, and surname.');
+      return;
+    }
+    const plateClean = fPlate.trim().toUpperCase().replace(/\s/g, '');
+    if (!PLATE_RE.test(plateClean)) {
+      setPlateError(true);
+      Alert.alert('', 'Enter a valid plate number: T + 3 digits + 3 letters (e.g. T123ABC).');
+      return;
+    }
     setSaving(true);
     try {
       await vehicleRegistryService.register({
         ownerName:  fOwnerName.trim(),
         ownerPhone: fPhone.trim(),
-        plateNumber: fPlate.trim().toUpperCase(),
+        plateNumber: plateClean,
         make:     fMake.trim(),
         model:    fModel.trim(),
         category: fCategory,
       });
       setShowAdd(false);
-      setLastRegisteredPlate(fPlate.trim().toUpperCase());
+      setLastRegisteredPlate(plateClean);
       resetForm();
       load();
       setShowSuccessModal(true);
@@ -198,10 +243,63 @@ export default function VehiclesScreen() {
           <View style={S.sheetHandle} />
           <Text style={[S.sheetTitle, { color: C.text }]}>Register Vehicle</Text>
 
+          {/* Owner Full Name — auto-capitalize each word, require 3 names */}
+          <View style={{ marginBottom: 12 }}>
+            <Text style={[S.inputLabel, { color: C.textSub }]}>Owner Full Name *</Text>
+            <TextInput
+              style={[S.input, { color: C.text, backgroundColor: C.bg,
+                borderColor: nameError ? '#EF4444' : C.border }]}
+              value={fOwnerName}
+              onChangeText={(text) => {
+                const formatted = formatFullName(text);
+                setFOwnerName(formatted);
+                setNameError(formatted.length > 0 && !isThreeNames(formatted));
+              }}
+              placeholder="e.g. Juma Ally Hassan"
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="words"
+            />
+            <Text style={[S.hintSmall, { color: nameError ? '#EF4444' : C.textMuted }]}>
+              Enter first, middle, and surname (e.g. Juma Ally Hassan)
+            </Text>
+          </View>
+
+          <View style={{ marginBottom: 12 }}>
+            <Text style={[S.inputLabel, { color: C.textSub }]}>Phone Number *</Text>
+            <TextInput
+              style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
+              value={fPhone}
+              onChangeText={setFPhone}
+              placeholder="+255 7XX XXX XXX"
+              placeholderTextColor={C.textMuted}
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          {/* Plate Number — same format/validation as attendant Vehicle Lookup */}
+          <View style={{ marginBottom: 12 }}>
+            <Text style={[S.inputLabel, { color: C.textSub }]}>Plate Number *</Text>
+            <TextInput
+              style={[S.input, { color: C.text, backgroundColor: C.bg,
+                borderColor: plateError ? '#EF4444' : C.border, letterSpacing: 2, fontWeight: '700' }]}
+              value={formatPlate(fPlate)}
+              onChangeText={(text) => {
+                const raw = text.replace(/\s/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+                setFPlate(raw);
+                setPlateError(raw.length > 0 && !isPartialPlateValid(raw));
+              }}
+              placeholder="T 000 AAA"
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={9}
+            />
+            <Text style={[S.hintSmall, { color: plateError ? '#EF4444' : C.textMuted }]}>
+              Format: T + 3 digits + 3 letters (e.g. T 566 GHH)
+            </Text>
+          </View>
+
           {[
-            { label: 'Owner Full Name *', value: fOwnerName, setter: setFOwnerName, placeholder: 'e.g. Juma Ally Hassan' },
-            { label: 'Phone Number *',    value: fPhone,     setter: setFPhone,     placeholder: '+255 7XX XXX XXX', keyboardType: 'phone-pad' as any },
-            { label: 'Plate Number *',    value: fPlate,     setter: setFPlate,     placeholder: 'T 882 DXZ', autoCapitalize: 'characters' as any },
             { label: 'Make (optional)',   value: fMake,      setter: setFMake,      placeholder: 'e.g. Toyota' },
             { label: 'Model (optional)',  value: fModel,     setter: setFModel,     placeholder: 'e.g. Corolla' },
           ].map(field => (
@@ -213,8 +311,6 @@ export default function VehiclesScreen() {
                 onChangeText={field.setter}
                 placeholder={field.placeholder}
                 placeholderTextColor={C.textMuted}
-                keyboardType={field.keyboardType}
-                autoCapitalize={field.autoCapitalize}
               />
             </View>
           ))}
@@ -230,13 +326,6 @@ export default function VehiclesScreen() {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
-
-          <View style={S.infoNote}>
-            <Ionicons name="information-circle-outline" size={16} color={SprintColors.green} />
-            <Text style={[S.infoNoteText, { color: C.textSub }]}>
-              An SMS confirmation will be sent to the owner&apos;s phone number.
-            </Text>
           </View>
 
           <TouchableOpacity style={[S.saveBtn, saving && { opacity: 0.6 }]}
@@ -269,12 +358,6 @@ export default function VehiclesScreen() {
             <Text style={[successStyles.sub, { color: C.textSub }]}>
               Successfully added to the ParkiPay vehicle registry.
             </Text>
-            <View style={successStyles.noteRow}>
-              <Ionicons name="information-circle-outline" size={16} color="#1EB53A" />
-              <Text style={[successStyles.noteText, { color: C.textSub }]}>
-                The vehicle owner will receive an SMS when a parking bill is generated.
-              </Text>
-            </View>
             <TouchableOpacity style={successStyles.doneBtn}
               onPress={() => setShowSuccessModal(false)}>
               <Ionicons name="checkmark" size={18} color="#fff" />
@@ -348,6 +431,7 @@ function makeStyles(C: ReturnType<typeof palette>) {
     inputLabel:{ fontSize:13, fontWeight:'600', marginBottom:6 },
     input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
       fontSize:15, marginBottom:2 },
+    hintSmall:{ fontSize:11, marginTop:5 },
     catGrid:{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:14 },
     catChip:{ paddingHorizontal:12, paddingVertical:7, borderRadius:20,
       backgroundColor:'rgba(30,181,58,0.08)', borderWidth:1.5,
