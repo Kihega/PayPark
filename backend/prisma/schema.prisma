@@ -14,7 +14,7 @@ model Officer {
   fullName            String            @map("full_name")
   phone               String            @default("")
   email               String            @default("")
-  role                OfficerRole       @default(FIELD_OFFICER)
+  role                OfficerRole       @default(ATTENDANT)
   passwordHash        String            @map("password_hash")
   locationId          Int?              @map("location_id")
   isActive            Boolean           @default(true) @map("is_active")
@@ -147,9 +147,8 @@ enum BillStatus {
 }
 
 enum OfficerRole {
-  FIELD_OFFICER
+  ATTENDANT
   SUPERVISOR
-  ADMIN
 }
 
 enum VehicleCategory {

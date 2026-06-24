@@ -19,7 +19,7 @@ interface Officer  { id:number; employeeId:string; fullName:string; locationName
 interface Location { id:number; name:string; region:string; }
 
 const ROLE_COLORS: Record<string,string> = {
-  FIELD_OFFICER: SprintColors.green, SUPERVISOR: '#1565C0', ADMIN: '#6A1B9A',
+  ATTENDANT: SprintColors.green, SUPERVISOR: '#1565C0',
 };
 const { width: W } = Dimensions.get('window');
 const SIDEBAR_W    = W * 0.75;
@@ -311,7 +311,7 @@ export default function AdminScreen() {
                   <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
                     <View style={[S.roleChip, { backgroundColor: ROLE_COLORS[o.role] ?? SprintColors.green }]}>
                       <Text style={S.roleText}>
-                        {o.role === 'FIELD_OFFICER' ? tr('fieldOfficer') : tr('supervisor')}
+                        {o.role === 'ATTENDANT' ? tr('fieldOfficer') : tr('supervisor')}
                       </Text>
                     </View>
                   </View>

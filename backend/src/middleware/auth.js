@@ -56,7 +56,6 @@ function requireRole(...roles) {
   };
 }
 
-const isSupervisor = requireRole('SUPERVISOR', 'ADMIN');
-const isAdmin      = requireRole('ADMIN');
+const isSupervisor = requireRole('SUPERVISOR');
 
-module.exports = { authenticate, requireRole, isSupervisor, isAdmin };
+module.exports = { authenticate, requireRole, isSupervisor };

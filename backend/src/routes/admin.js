@@ -24,8 +24,8 @@ const router = Router();
 
 function adminOnly(req, res, next) {
   const role = req.officer?.role;
-  if (role !== 'SUPERVISOR' && role !== 'ADMIN') {
-    return res.status(403).json({ error: 'forbidden', detail: 'Supervisor or Admin role required.' });
+  if (role !== 'SUPERVISOR') {
+    return res.status(403).json({ error: 'forbidden', detail: 'Supervisor role required.' });
   }
   next();
 }
@@ -56,7 +56,7 @@ const CreateOfficerSchema = z.object({
   employeeId: z.string().min(2).max(20),
   fullName:   z.string().min(2),
   locationId: z.number().int().positive().nullable().optional(),
-  role:       z.enum(['FIELD_OFFICER','SUPERVISOR']).default('FIELD_OFFICER'),
+  role:       z.enum(['ATTENDANT','SUPERVISOR']).default('ATTENDANT'),
 });
 
 router.post('/officers/', async (req, res, next) => {

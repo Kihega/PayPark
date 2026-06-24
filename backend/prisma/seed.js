@@ -6,8 +6,8 @@
 // ╠═══════════════════╦═════════════╦═════════════════════════╣
 // ║ Role              ║ Employee ID ║ Password                ║
 // ╠═══════════════════╬═════════════╬═════════════════════════╣
-// ║ Admin             ║ ADMIN001    ║ Admin@1234              ║
-// ║ Field Officer     ║ OFF001      ║ Officer@1234            ║
+// ║ Attendant         ║ TZ-0001     ║ Officer@1234            ║
+// ║ Supervisor        ║ SUP-0001    ║ Supervisor@1234         ║
 // ╚═══════════════════╩═════════════╩═════════════════════════╝
 //
 // Run:  npm run db:seed
@@ -39,38 +39,6 @@ async function main() {
   });
   console.log(`  ✅ Location: ${dar.name}`);
 
-  // ── Admin officer ─────────────────────────────────────────────────────────
-  const admin = await prisma.officer.upsert({
-    where:  { employeeId: 'ADMIN001' },
-    update: {},
-    create: {
-      employeeId:   'ADMIN001',
-      fullName:     'System Administrator',
-      phone:        '+255700000001',
-      email:        'admin@parkipay.go.tz',
-      role:         'ADMIN',
-      passwordHash: await bcrypt.hash('Admin@1234', 12),
-      locationId:   dar.id,
-    },
-  });
-  console.log(`  ✅ Admin officer: ${admin.employeeId} (password: Admin@1234)`);
-
-  // ── Field officer ─────────────────────────────────────────────────────────
-  const officer = await prisma.officer.upsert({
-    where:  { employeeId: 'OFF001' },
-    update: {},
-    create: {
-      employeeId:   'OFF001',
-      fullName:     'John Mwangi',
-      phone:        '+255712345678',
-      email:        'j.mwangi@parkipay.go.tz',
-      role:         'FIELD_OFFICER',
-      passwordHash: await bcrypt.hash('Officer@1234', 12),
-      locationId:   dar.id,
-    },
-  });
-  console.log(`  ✅ Field officer: ${officer.employeeId} (password: Officer@1234)`);
-
   // ── Sample vehicle ────────────────────────────────────────────────────────
   const vehicle = await prisma.vehicle.upsert({
     where:  { plateNumber: 'TZ001ABC' },
@@ -89,8 +57,7 @@ async function main() {
   });
   console.log(`  ✅ Sample vehicle: ${vehicle.plateNumber} (${vehicle.ownerName})`);
 
-
-  // ── Supervisor (test) ─────────────────────────────────────────────────────
+  // ── Supervisor (test, SUP-XXXX format) ───────────────────────────────────
   const supervisor = await prisma.officer.upsert({
     where:  { employeeId: 'SUP-0001' },
     update: {},
@@ -100,14 +67,31 @@ async function main() {
       phone:        '+255700000002',
       email:        'supervisor@parkipay.go.tz',
       role:         'SUPERVISOR',
+      passwordHash: await bcrypt.hash('Supervisor@1234', 12),
       locationId:   dar.id,
     },
   });
-  console.log(`  ✅ Supervisor: ${supervisor.employeeId} (${supervisor.fullName})`);
+  console.log(`  ✅ Supervisor: ${supervisor.employeeId} (password: Supervisor@1234)`);
+
+  // ── Field officer (TZ-XXXX format) ───────────────────────────────────────
+  const attendant = await prisma.officer.upsert({
+    where:  { employeeId: 'TZ-0001' },
+    update: {},
+    create: {
+      employeeId:   'TZ-0001',
+      fullName:     'John Mwangi',
+      phone:        '+255712345678',
+      email:        'j.mwangi@parkipay.go.tz',
+      role:         'ATTENDANT',
+      passwordHash: await bcrypt.hash('Officer@1234', 12),
+      locationId:   dar.id,
+    },
+  });
+  console.log(`  ✅ Attendant: ${attendant.employeeId} (password: Officer@1234)`);
 
   console.log('\n🎉 Seed complete. You can log in with:');
-  console.log('   Admin:         ADMIN001   / Admin@1234');
-  console.log('   Field Officer: OFF001     / Officer@1234');
+  console.log('   Attendant:   TZ-0001    / Officer@1234');
+  console.log('   Supervisor:  SUP-0001   / Supervisor@1234');
 }
 
 main()
