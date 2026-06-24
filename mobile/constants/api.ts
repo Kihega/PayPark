@@ -14,6 +14,9 @@
  *        Termux      : ip addr show | grep "inet " | grep -v 127
  *   2. Copy mobile/.env.example → mobile/.env
  *   3. Set EXPO_PUBLIC_API_URL=http://<YOUR_LAN_IP>:8000
+ *      (host:port ONLY — do NOT add /api; every route already
+ *      includes it, and API_BASE_URL strips a trailing /api
+ *      automatically if you add it anyway)
  *   4. Make sure your PC firewall allows inbound on port 8000.
  */
 
@@ -36,11 +39,24 @@ const PRODUCTION_API_URL = 'https://paypark-backend-6kc4.onrender.com';
 
 // ── Resolved base URL ─────────────────────────────────────────────────────────
 
-export const API_BASE_URL: string =
+// Strip a trailing slash AND a trailing /api segment, however the
+// value was written (with/without protocol slash, with/without a
+// final slash). This makes it impossible to end up with the
+// '/api/api/...' duplication bug: every route in API_ROUTES (and
+// every call in services/api.ts) already starts with '/api/...',
+// so API_BASE_URL must always be just '<scheme>://<host>:<port>'
+// with NO /api suffix — whether it came from .env, the emulator
+// fallback, or the production constant.
+function stripApiSuffix(url: string): string {
+  return url.replace(/\/+$/, '').replace(/\/api$/i, '');
+}
+
+export const API_BASE_URL: string = stripApiSuffix(
   // Priority 1: explicit override from .env (physical device / staging / prod)
   process.env.EXPO_PUBLIC_API_URL ??
   // Priority 2: auto-detect for simulators/emulators in dev mode
-  (__DEV__ ? getLocalDevUrl() : PRODUCTION_API_URL);
+  (__DEV__ ? getLocalDevUrl() : PRODUCTION_API_URL),
+);
 
 // Log the resolved URL in dev so you can verify it immediately
 if (__DEV__) {
