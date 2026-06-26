@@ -15,6 +15,11 @@ import { router } from 'expo-router';
 import { useSettingsStore, palette } from '@/store/settingsStore';
 import { vehicleRegistryService } from '@/services/api';
 import { SprintColors } from '@/constants/theme';
+import { moderateScale } from '@/utils/responsive';
+
+function toTitleCase(s: string): string {
+  return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
+}
 
 interface Vehicle {
   id: number;
@@ -398,7 +403,7 @@ function makeStyles(C: ReturnType<typeof palette>) {
       paddingHorizontal:16, paddingVertical:14 },
     backBtn:{ width:38, height:38, borderRadius:10, alignItems:'center', justifyContent:'center',
       backgroundColor:'rgba(255,255,255,0.1)' },
-    headerTitle:{ fontSize:17, fontWeight:'800', color:'#fff', textAlign:'center' },
+    headerTitle:{ fontSize: moderateScale(17), fontWeight:'800', color:'#fff', textAlign:'center' },
     headerSub:{ fontSize:11, color:'rgba(255,255,255,0.6)', textAlign:'center' },
     emptyWrap:{ alignItems:'center', marginTop:60, gap:10, paddingHorizontal:32 },
     emptyTitle:{ fontSize:16, fontWeight:'700' },
@@ -427,10 +432,10 @@ function makeStyles(C: ReturnType<typeof palette>) {
       maxHeight:'92%' },
     sheetHandle:{ width:40, height:4, borderRadius:2, backgroundColor:'rgba(0,0,0,0.15)',
       alignSelf:'center', marginBottom:16 },
-    sheetTitle:{ fontSize:19, fontWeight:'900', marginBottom:18 },
-    inputLabel:{ fontSize:13, fontWeight:'600', marginBottom:6 },
-    input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
-      fontSize:15, marginBottom:2 },
+    sheetTitle:{ fontSize: moderateScale(19), fontWeight:'900', marginBottom:18 },
+    inputLabel:{ fontSize: moderateScale(13), fontWeight:'600', marginBottom:6 },
+    input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
+      fontSize: moderateScale(15), marginBottom:2 },
     hintSmall:{ fontSize:11, marginTop:5 },
     catGrid:{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:14 },
     catChip:{ paddingHorizontal:12, paddingVertical:7, borderRadius:20,

@@ -2,7 +2,7 @@
   "name": "parkipay",
   "main": "expo-router/entry",
   "version": "1.0.0",
-  "description": "ParkiPay \u2014 Government Parking Fee Collection, Tanzania",
+  "description": "ParkiPay — Government Parking Fee Collection, Tanzania",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",

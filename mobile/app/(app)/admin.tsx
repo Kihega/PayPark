@@ -14,6 +14,13 @@ import { useSettingsStore, palette } from '@/store/settingsStore';
 import { t }                         from '@/constants/i18n';
 import { adminService }              from '@/services/api';
 import { SprintColors }              from '@/constants/theme';
+import { moderateScale }             from '@/utils/responsive';
+
+// Capitalizes the first letter of every word as the user types
+// (e.g. "juma ally" -> "Juma Ally")
+function toTitleCase(s: string): string {
+  return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
+}
 
 interface Officer  { id:number; employeeId:string; fullName:string; locationName:string|null; role:string; }
 interface Location { id:number; name:string; region:string; }
@@ -510,7 +517,7 @@ const styles = StyleSheet.create({
     paddingHorizontal:16, paddingVertical:14 },
   menuBtn:{ width:38, height:38, borderRadius:10, alignItems:'center',
     justifyContent:'center', backgroundColor:'rgba(255,255,255,0.1)' },
-  headerTitle:{ fontSize:18, fontWeight:'800', color:'#fff' },
+  headerTitle:{ fontSize: moderateScale(18), fontWeight:'800', color:'#fff' },
   // List
   emptyWrap:{ alignItems:'center', marginTop:60, gap:12 },
   emptyText:{ fontSize:15 },
@@ -532,10 +539,10 @@ const styles = StyleSheet.create({
   fabText:{ color:'#fff', fontWeight:'800', fontSize:14 },
   backdrop:{ flex:1, backgroundColor:'rgba(0,0,0,0.5)' },
   sheet:{ borderTopLeftRadius:20, borderTopRightRadius:20, padding:24, paddingBottom:40 },
-  sheetTitle:{ fontSize:18, fontWeight:'800', marginBottom:16 },
-  inputLabel:{ fontSize:13, fontWeight:'600', marginBottom:6 },
-  input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
-    fontSize:15, marginBottom:14 },
+  sheetTitle:{ fontSize: moderateScale(18), fontWeight:'800', marginBottom:16 },
+  inputLabel:{ fontSize: moderateScale(13), fontWeight:'600', marginBottom:6 },
+  input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
+    fontSize: moderateScale(15), marginBottom:14 },
   inputHintSmall:{ fontSize:11, marginTop:-8, marginBottom:14 },
   locGrid:{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:20 },
   locChip:{ paddingHorizontal:12, paddingVertical:7, borderRadius:20,

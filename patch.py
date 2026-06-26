@@ -1,529 +1,474 @@
 #!/usr/bin/env python3
 """
-ParkiPay — mobile UX fixes (5 items)
-=====================================
+ParkiPay patch — paypark_patch4.py
 
-1. Register Vehicle form: Owner Full Name auto-capitalizes each word as
-   typed and requires exactly three names (first, middle, surname).
-   Plate Number field now uses the SAME format/validation as the
-   attendant's Vehicle Lookup screen (T + 3 digits + 3 letters, live
-   "T 000 AAA" grouping, red border on invalid partial input).
+Covers four things:
 
-2. Add Officer form: Full Name gets the same auto-capitalize + three-name
-   validation as (1).
+1. RESPONSIVE LAYOUT
+   Adds mobile/utils/responsive.ts (scale / verticalScale / moderateScale /
+   getScreenSize helpers based on a 375x812 baseline) and wires global font
+   scaling caps into the root layout so text and inputs shrink gracefully on
+   small phones instead of being clipped. The Add-Officer and Add-Vehicle
+   sheets (explicitly named in the request) are switched to use
+   moderateScale() for their key font sizes/heights so they visibly adapt
+   on small / medium / large screens.
 
-4. The "SMS will be sent to owner" info note is removed from the Register
-   Vehicle form AND from its own success modal. Instead, it now appears
-   in the attendant's "Bill Generated!" success modal (lookup.tsx) as a
-   proper info card, since that's the point an SMS is actually triggered
-   (billing/generate, not vehicle registration).
+2. ADD SUPERVISOR / ADD OFFICER / ADD VEHICLE FORMS
+   - Officer "Full Name" and Vehicle "Owner Full Name" inputs are now
+     force-capitalized as the user types (Title Case), instead of just
+     hinting the keyboard with autoCapitalize.
+   - Locations dropdown already pulled live from the DB (admin.tsx already
+     calls adminService.listLocations()) — confirmed working, left as-is.
+   - New officers already reappear in the list after creation (load() is
+     called after a successful create) — confirmed working, left as-is.
 
-5. "Admin Panel" -> "Supervisor Panel" (constants/i18n.ts, English only;
-   the Swahili string already reads as "Supervisor's Panel").
+3. ADD VEHICLE — SMS NOTICE RELOCATION
+   Removes the blue "An SMS confirmation will be sent to the owner's phone
+   number" note from the Add-Vehicle form (it described something that
+   hadn't happened yet). The bill-generation success screen
+   (mobile/app/(app)/lookup.tsx) already shows "SMS sent to owner." after a
+   bill is actually generated — that is left untouched since it is already
+   correctly placed.
 
-Run from the REPO ROOT (the directory containing backend/ and mobile/):
-    python3 patch_form_validation_and_ui.py
+4. LOCATIONS / ZONES SEED
+   Rewrites backend/prisma/seed.js to:
+     - Wipe all existing ParkingLocation / Officer / Vehicle / ControlNumber
+       / AuditLog rows first (clean slate).
+     - Seed 5 zones across different regions (Kinondoni, Ubungo, Temeke,
+       Ilala, Kigamboni), each with 5 sample parking locations (25 total).
+     - Re-create the two test officers:
+         SUP-0001 (Supervisor) -> Kinondoni Zone
+         TZ-0001  (Attendant)  -> Kinondoni - Mwenge Bus Stand (a location
+                                   inside Kinondoni Zone)
+     - Re-creates the sample vehicle TZ001ABC.
+
+Usage:
+    python3 paypark_patch4.py
+Then:
+    cd backend && npx prisma db seed
 """
-import re
-import subprocess
+import os
 import sys
-from pathlib import Path
 
-ROOT       = Path(".")
-MOBILE     = ROOT / "mobile"
-VEHICLES   = MOBILE / "app" / "(app)" / "vehicles.tsx"
-ADMIN      = MOBILE / "app" / "(app)" / "admin.tsx"
-LOOKUP     = MOBILE / "app" / "(app)" / "lookup.tsx"
-I18N       = MOBILE / "constants" / "i18n.ts"
+ROOT = os.getcwd()
 
 
-def fail(msg: str) -> None:
+def fail(msg):
     print(f"❌ {msg}")
     sys.exit(1)
 
 
-def must_contain(src: str, snippet: str, path: Path, what: str) -> None:
-    if snippet not in src:
-        fail(f"Could not find {what} in {path} — aborting, no changes made.")
+def read(p):
+    with open(p, "r", encoding="utf-8") as f:
+        return f.read()
 
 
-# ── Shared name-formatting helper (inserted into both vehicles.tsx and admin.tsx) ──
-
-NAME_HELPER = """
-// ── Full-name formatting (shared pattern: title-case + 3-name check) ───────
-// Auto-capitalizes each word as the user types, e.g. "juma ally hassan"
-// -> "Juma Ally Hassan". Does not trim while typing (so trailing spaces
-// while the user is still composing a word are preserved).
-function formatFullName(raw: string): string {
-  return raw.replace(/\\b\\w/g, (c) => c.toUpperCase());
-}
-
-// True only when the trimmed name has exactly 3 space-separated parts
-// (first, middle, surname) and none of them are empty.
-function isThreeNames(raw: string): boolean {
-  const parts = raw.trim().split(/\\s+/).filter(Boolean);
-  return parts.length === 3;
-}
-"""
-
-PLATE_HELPER = """
-// ── Plate helpers (matches attendant Vehicle Lookup screen exactly) ────────
-// Tanzania: T + 3 digits + 3 uppercase letters  -> e.g. T000AAA
-const PLATE_RE = /^T\\d{3}[A-Z]{3}$/;
-
-function isPartialPlateValid(raw: string): boolean {
-  if (raw.length === 0) return true;
-  if (raw[0] !== 'T') return false;
-  for (let i = 1; i < Math.min(raw.length, 4); i++) {
-    if (!/\\d/.test(raw[i])) return false;
-  }
-  for (let i = 4; i < raw.length; i++) {
-    if (!/[A-Z]/.test(raw[i])) return false;
-  }
-  return true;
-}
-"""
+def write(p, c):
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(c)
 
 
-def patch_vehicles() -> None:
-    if not VEHICLES.exists():
-        fail(f"{VEHICLES} not found.")
-    src = VEHICLES.read_text(encoding="utf-8")
-    original = src
-
-    # ── Insert shared helpers right after the existing formatPlate() (display fn) ──
-    anchor = (
-        "function formatPlate(raw: string): string {\n"
-        "  const s = raw.replace(/\\s/g, '');\n"
-        "  if (s.length <= 1)  return s;\n"
-        "  if (s.length <= 4)  return s[0] + ' ' + s.slice(1);\n"
-        "  return s[0] + ' ' + s.slice(1, 4) + ' ' + s.slice(4);\n"
-        "}\n"
-    )
-    must_contain(src, anchor, VEHICLES, "formatPlate() helper")
-    src = src.replace(anchor, anchor + NAME_HELPER + PLATE_HELPER)
-
-    # ── Add live validation state next to the other form fields ────────────
-    old_state = (
-        "  const [fOwnerName,  setFOwnerName]  = useState('');\n"
-        "  const [fPhone,      setFPhone]      = useState('');\n"
-        "  const [fPlate,      setFPlate]      = useState('');\n"
-    )
-    must_contain(src, old_state, VEHICLES, "form state declarations")
-    new_state = (
-        "  const [fOwnerName,  setFOwnerName]  = useState('');\n"
-        "  const [fPhone,      setFPhone]      = useState('');\n"
-        "  const [fPlate,      setFPlate]      = useState('');\n"
-        "  const [nameError,   setNameError]   = useState(false);\n"
-        "  const [plateError,  setPlateError]  = useState(false);\n"
-    )
-    src = src.replace(old_state, new_state)
-
-    # ── Reset the new error flags alongside the rest of the form ────────────
-    old_reset = (
-        "  const resetForm = () => {\n"
-        "    setFOwnerName(''); setFPhone(''); setFPlate('');\n"
-        "    setFMake(''); setFModel(''); setFCategory('PRIVATE_CAR');\n"
-        "  };\n"
-    )
-    must_contain(src, old_reset, VEHICLES, "resetForm()")
-    new_reset = (
-        "  const resetForm = () => {\n"
-        "    setFOwnerName(''); setFPhone(''); setFPlate('');\n"
-        "    setFMake(''); setFModel(''); setFCategory('PRIVATE_CAR');\n"
-        "    setNameError(false); setPlateError(false);\n"
-        "  };\n"
-    )
-    src = src.replace(old_reset, new_reset)
-
-    # ── handleRegister: validate 3-name + plate format before submitting ───
-    old_handle_start = (
-        "  const handleRegister = async () => {\n"
-        "    if (!fOwnerName.trim() || !fPhone.trim() || !fPlate.trim()) {\n"
-        "      Alert.alert('', 'Owner name, phone and plate number are required.'); return;\n"
-        "    }\n"
-        "    setSaving(true);\n"
-        "    try {\n"
-        "      await vehicleRegistryService.register({\n"
-        "        ownerName:  fOwnerName.trim(),\n"
-        "        ownerPhone: fPhone.trim(),\n"
-        "        plateNumber: fPlate.trim().toUpperCase(),\n"
-    )
-    must_contain(src, old_handle_start, VEHICLES, "handleRegister() body")
-    new_handle_start = (
-        "  const handleRegister = async () => {\n"
-        "    if (!fOwnerName.trim() || !fPhone.trim() || !fPlate.trim()) {\n"
-        "      Alert.alert('', 'Owner name, phone and plate number are required.'); return;\n"
-        "    }\n"
-        "    if (!isThreeNames(fOwnerName)) {\n"
-        "      setNameError(true);\n"
-        "      Alert.alert('', 'Enter the owner\\'s full name as three names: first, middle, and surname.');\n"
-        "      return;\n"
-        "    }\n"
-        "    const plateClean = fPlate.trim().toUpperCase().replace(/\\s/g, '');\n"
-        "    if (!PLATE_RE.test(plateClean)) {\n"
-        "      setPlateError(true);\n"
-        "      Alert.alert('', 'Enter a valid plate number: T + 3 digits + 3 letters (e.g. T123ABC).');\n"
-        "      return;\n"
-        "    }\n"
-        "    setSaving(true);\n"
-        "    try {\n"
-        "      await vehicleRegistryService.register({\n"
-        "        ownerName:  fOwnerName.trim(),\n"
-        "        ownerPhone: fPhone.trim(),\n"
-        "        plateNumber: plateClean,\n"
-    )
-    src = src.replace(old_handle_start, new_handle_start)
-
-    # ── Replace fLastRegisteredPlate assignment to use the cleaned value ───
-    old_last_plate = "      setLastRegisteredPlate(fPlate.trim().toUpperCase());\n"
-    must_contain(src, old_last_plate, VEHICLES, "setLastRegisteredPlate() call")
-    src = src.replace(old_last_plate, "      setLastRegisteredPlate(plateClean);\n")
-
-    # ── Replace the generic field-map rendering for Owner Name + Plate Number ──
-    # The old version rendered ALL fields (including Owner Name and Plate
-    # Number) from one generic array with no live validation. We pull those
-    # two out into dedicated inputs with formatting/validation, and keep the
-    # rest (phone, make, model) on the old generic path.
-    old_fields_block = (
-        "          {[\n"
-        "            { label: 'Owner Full Name *', value: fOwnerName, setter: setFOwnerName, placeholder: 'e.g. Juma Ally Hassan' },\n"
-        "            { label: 'Phone Number *',    value: fPhone,     setter: setFPhone,     placeholder: '+255 7XX XXX XXX', keyboardType: 'phone-pad' as any },\n"
-        "            { label: 'Plate Number *',    value: fPlate,     setter: setFPlate,     placeholder: 'T 882 DXZ', autoCapitalize: 'characters' as any },\n"
-        "            { label: 'Make (optional)',   value: fMake,      setter: setFMake,      placeholder: 'e.g. Toyota' },\n"
-        "            { label: 'Model (optional)',  value: fModel,     setter: setFModel,     placeholder: 'e.g. Corolla' },\n"
-        "          ].map(field => (\n"
-        "            <View key={field.label} style={{ marginBottom: 12 }}>\n"
-        "              <Text style={[S.inputLabel, { color: C.textSub }]}>{field.label}</Text>\n"
-        "              <TextInput\n"
-        "                style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}\n"
-        "                value={field.value}\n"
-        "                onChangeText={field.setter}\n"
-        "                placeholder={field.placeholder}\n"
-        "                placeholderTextColor={C.textMuted}\n"
-        "                keyboardType={field.keyboardType}\n"
-        "                autoCapitalize={field.autoCapitalize}\n"
-        "              />\n"
-        "            </View>\n"
-        "          ))}\n"
-    )
-    must_contain(src, old_fields_block, VEHICLES, "generic form-fields render block")
-
-    new_fields_block = (
-        "          {/* Owner Full Name — auto-capitalize each word, require 3 names */}\n"
-        "          <View style={{ marginBottom: 12 }}>\n"
-        "            <Text style={[S.inputLabel, { color: C.textSub }]}>Owner Full Name *</Text>\n"
-        "            <TextInput\n"
-        "              style={[S.input, { color: C.text, backgroundColor: C.bg,\n"
-        "                borderColor: nameError ? '#EF4444' : C.border }]}\n"
-        "              value={fOwnerName}\n"
-        "              onChangeText={(text) => {\n"
-        "                const formatted = formatFullName(text);\n"
-        "                setFOwnerName(formatted);\n"
-        "                setNameError(formatted.length > 0 && !isThreeNames(formatted));\n"
-        "              }}\n"
-        "              placeholder=\"e.g. Juma Ally Hassan\"\n"
-        "              placeholderTextColor={C.textMuted}\n"
-        "              autoCapitalize=\"words\"\n"
-        "            />\n"
-        "            <Text style={[S.hintSmall, { color: nameError ? '#EF4444' : C.textMuted }]}>\n"
-        "              Enter first, middle, and surname (e.g. Juma Ally Hassan)\n"
-        "            </Text>\n"
-        "          </View>\n"
-        "\n"
-        "          <View style={{ marginBottom: 12 }}>\n"
-        "            <Text style={[S.inputLabel, { color: C.textSub }]}>Phone Number *</Text>\n"
-        "            <TextInput\n"
-        "              style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}\n"
-        "              value={fPhone}\n"
-        "              onChangeText={setFPhone}\n"
-        "              placeholder=\"+255 7XX XXX XXX\"\n"
-        "              placeholderTextColor={C.textMuted}\n"
-        "              keyboardType=\"phone-pad\"\n"
-        "            />\n"
-        "          </View>\n"
-        "\n"
-        "          {/* Plate Number — same format/validation as attendant Vehicle Lookup */}\n"
-        "          <View style={{ marginBottom: 12 }}>\n"
-        "            <Text style={[S.inputLabel, { color: C.textSub }]}>Plate Number *</Text>\n"
-        "            <TextInput\n"
-        "              style={[S.input, { color: C.text, backgroundColor: C.bg,\n"
-        "                borderColor: plateError ? '#EF4444' : C.border, letterSpacing: 2, fontWeight: '700' }]}\n"
-        "              value={formatPlate(fPlate)}\n"
-        "              onChangeText={(text) => {\n"
-        "                const raw = text.replace(/\\s/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);\n"
-        "                setFPlate(raw);\n"
-        "                setPlateError(raw.length > 0 && !isPartialPlateValid(raw));\n"
-        "              }}\n"
-        "              placeholder=\"T 000 AAA\"\n"
-        "              placeholderTextColor={C.textMuted}\n"
-        "              autoCapitalize=\"characters\"\n"
-        "              autoCorrect={false}\n"
-        "              maxLength={9}\n"
-        "            />\n"
-        "            <Text style={[S.hintSmall, { color: plateError ? '#EF4444' : C.textMuted }]}>\n"
-        "              Format: T + 3 digits + 3 letters (e.g. T 566 GHH)\n"
-        "            </Text>\n"
-        "          </View>\n"
-        "\n"
-        "          {[\n"
-        "            { label: 'Make (optional)',   value: fMake,      setter: setFMake,      placeholder: 'e.g. Toyota' },\n"
-        "            { label: 'Model (optional)',  value: fModel,     setter: setFModel,     placeholder: 'e.g. Corolla' },\n"
-        "          ].map(field => (\n"
-        "            <View key={field.label} style={{ marginBottom: 12 }}>\n"
-        "              <Text style={[S.inputLabel, { color: C.textSub }]}>{field.label}</Text>\n"
-        "              <TextInput\n"
-        "                style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}\n"
-        "                value={field.value}\n"
-        "                onChangeText={field.setter}\n"
-        "                placeholder={field.placeholder}\n"
-        "                placeholderTextColor={C.textMuted}\n"
-        "              />\n"
-        "            </View>\n"
-        "          ))}\n"
-    )
-    src = src.replace(old_fields_block, new_fields_block)
-
-    # ── Remove the SMS info note from the Register Vehicle form ────────────
-    old_form_note = (
-        "          <View style={S.infoNote}>\n"
-        "            <Ionicons name=\"information-circle-outline\" size={16} color={SprintColors.green} />\n"
-        "            <Text style={[S.infoNoteText, { color: C.textSub }]}>\n"
-        "              An SMS confirmation will be sent to the owner&apos;s phone number.\n"
-        "            </Text>\n"
-        "          </View>\n"
-        "\n"
-    )
-    must_contain(src, old_form_note, VEHICLES, "Register Vehicle form SMS info note")
-    src = src.replace(old_form_note, "")
-
-    # ── Remove the SMS note from the vehicle-registered success modal too ──
-    old_success_note = (
-        "            <View style={successStyles.noteRow}>\n"
-        "              <Ionicons name=\"information-circle-outline\" size={16} color=\"#1EB53A\" />\n"
-        "              <Text style={[successStyles.noteText, { color: C.textSub }]}>\n"
-        "                The vehicle owner will receive an SMS when a parking bill is generated.\n"
-        "              </Text>\n"
-        "            </View>\n"
-    )
-    must_contain(src, old_success_note, VEHICLES, "vehicle-registered success modal SMS note")
-    src = src.replace(old_success_note, "")
-
-    # ── Add the small hint-text style used above ────────────────────────────
-    old_input_style = (
-        "    input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,\n"
-        "      fontSize:15, marginBottom:2 },\n"
-    )
-    must_contain(src, old_input_style, VEHICLES, "input style definition")
-    new_input_style = old_input_style + (
-        "    hintSmall:{ fontSize:11, marginTop:5 },\n"
-    )
-    src = src.replace(old_input_style, new_input_style)
-
-    if src == original:
-        fail(f"No changes were made to {VEHICLES} — patch did not match.")
-    VEHICLES.write_text(src, encoding="utf-8")
-    print(f"✅ Patched {VEHICLES}")
-
-
-def patch_admin() -> None:
-    if not ADMIN.exists():
-        fail(f"{ADMIN} not found.")
-    src = ADMIN.read_text(encoding="utf-8")
-    original = src
-
-    # ── Insert the same name helper (admin.tsx doesn't have a plate field) ──
-    anchor = (
-        "const ROLE_COLORS: Record<string,string> = {\n"
-        "  ATTENDANT: SprintColors.green, SUPERVISOR: '#1565C0',\n"
-        "};\n"
-    )
-    must_contain(src, anchor, ADMIN, "ROLE_COLORS constant")
-    src = src.replace(anchor, anchor + NAME_HELPER)
-
-    # ── Add a nameError state next to the other Add Officer form state ─────
-    old_state = "  const [newEmpId,  setNewEmpId]  = useState('');\n"
-    must_contain(src, old_state, ADMIN, "newEmpId state declaration")
-    src = src.replace(old_state, old_state + "  const [nameError,  setNameError]  = useState(false);\n")
-
-    # ── Validate 3-name format in handleAdd before submitting ──────────────
-    old_handle_add = (
-        "  const handleAdd = async () => {\n"
-        "    if (!newName.trim() || !newEmpId.trim()) return;\n"
-        "    setSaving(true);\n"
-        "    try {\n"
-        "      await adminService.createOfficer({ fullName: newName.trim(),\n"
-        "        employeeId: newEmpId.trim(), locationId: newLocId });\n"
-        "      setShowAdd(false); setNewName(''); setNewEmpId(''); setNewLocId(null);\n"
-        "      load();\n"
-        "    } catch { /* silent */ }\n"
-        "    finally { setSaving(false); }\n"
-        "  };\n"
-    )
-    must_contain(src, old_handle_add, ADMIN, "handleAdd() body")
-    new_handle_add = (
-        "  const handleAdd = async () => {\n"
-        "    if (!newName.trim() || !newEmpId.trim()) return;\n"
-        "    if (!isThreeNames(newName)) {\n"
-        "      setNameError(true);\n"
-        "      return;\n"
-        "    }\n"
-        "    setSaving(true);\n"
-        "    try {\n"
-        "      await adminService.createOfficer({ fullName: newName.trim(),\n"
-        "        employeeId: newEmpId.trim(), locationId: newLocId });\n"
-        "      setShowAdd(false); setNewName(''); setNewEmpId(''); setNewLocId(null);\n"
-        "      setNameError(false);\n"
-        "      load();\n"
-        "    } catch { /* silent */ }\n"
-        "    finally { setSaving(false); }\n"
-        "  };\n"
-    )
-    src = src.replace(old_handle_add, new_handle_add)
-
-    # ── Replace the Full Name input with the formatted/validated version ───
-    old_name_input = (
-        "          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('officerName')}</Text>\n"
-        "          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}\n"
-        "            value={newName} onChangeText={setNewName} placeholder=\"e.g. Juma Ally\"\n"
-        "            autoCapitalize=\"words\" placeholderTextColor={C.textMuted}/>\n"
-    )
-    must_contain(src, old_name_input, ADMIN, "officer name TextInput")
-    new_name_input = (
-        "          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('officerName')}</Text>\n"
-        "          <TextInput\n"
-        "            style={[S.input, { color: C.text, backgroundColor: C.bg,\n"
-        "              borderColor: nameError ? '#EF4444' : C.border }]}\n"
-        "            value={newName}\n"
-        "            onChangeText={(text) => {\n"
-        "              const formatted = formatFullName(text);\n"
-        "              setNewName(formatted);\n"
-        "              setNameError(formatted.length > 0 && !isThreeNames(formatted));\n"
-        "            }}\n"
-        "            placeholder=\"e.g. Juma Ally Hassan\"\n"
-        "            autoCapitalize=\"words\"\n"
-        "            placeholderTextColor={C.textMuted}\n"
-        "          />\n"
-        "          <Text style={[S.inputHintSmall, { color: nameError ? '#EF4444' : C.textSub }]}>\n"
-        "            Enter first, middle, and surname (e.g. Juma Ally Hassan)\n"
-        "          </Text>\n"
-    )
-    src = src.replace(old_name_input, new_name_input)
-
-    # ── Add the small hint-text style ───────────────────────────────────────
-    old_input_style = (
-        "  input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,\n"
-        "    fontSize:15, marginBottom:14 },\n"
-    )
-    must_contain(src, old_input_style, ADMIN, "input style definition")
-    new_input_style = old_input_style + (
-        "  inputHintSmall:{ fontSize:11, marginTop:-8, marginBottom:14 },\n"
-    )
-    src = src.replace(old_input_style, new_input_style)
-
-    if src == original:
-        fail(f"No changes were made to {ADMIN} — patch did not match.")
-    ADMIN.write_text(src, encoding="utf-8")
-    print(f"✅ Patched {ADMIN}")
-
-
-def patch_lookup() -> None:
-    if not LOOKUP.exists():
-        fail(f"{LOOKUP} not found.")
-    src = LOOKUP.read_text(encoding="utf-8")
-    original = src
-
-    # ── Upgrade the inline "SMS sent to owner" line into a proper info card ──
-    old_success_text = (
-        "            <Text style={[S.successSub,   { color: C.textSub }]}>\n"
-        "              Parking bill issued successfully.\n"
-        "              {vehicle?.ownerPhone ? ' SMS sent to owner.' : ''}\n"
-        "            </Text>\n"
-    )
-    must_contain(src, old_success_text, LOOKUP, "bill-generated success modal subtext")
-    new_success_block = (
-        "            <Text style={[S.successSub,   { color: C.textSub }]}>\n"
-        "              Parking bill issued successfully.\n"
-        "            </Text>\n"
-        "            {!!vehicle?.ownerPhone && (\n"
-        "              <View style={S.smsNoteRow}>\n"
-        "                <Ionicons name=\"information-circle-outline\" size={16} color={SprintColors.green} />\n"
-        "                <Text style={[S.smsNoteText, { color: C.textSub }]}>\n"
-        "                  An SMS confirmation has been sent to the owner&apos;s phone number.\n"
-        "                </Text>\n"
-        "              </View>\n"
-        "            )}\n"
-    )
-    src = src.replace(old_success_text, new_success_block)
-
-    # ── Add the smsNoteRow / smsNoteText styles next to successSub ─────────
-    old_style_anchor = (
-        "    successSub:      { fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 18 },\n"
-    )
-    must_contain(src, old_style_anchor, LOOKUP, "successSub style")
-    new_style_anchor = old_style_anchor + (
-        "    smsNoteRow:      { flexDirection: 'row', gap: 8, padding: 10, borderRadius: 10,\n"
-        "      backgroundColor: 'rgba(30,181,58,0.06)', borderLeftWidth: 3,\n"
-        "      borderLeftColor: SprintColors.green, marginBottom: 18, alignItems: 'flex-start', width: '100%' },\n"
-        "    smsNoteText:     { flex: 1, fontSize: 12, lineHeight: 17 },\n"
-    )
-    src = src.replace(old_style_anchor, new_style_anchor)
-
-    if src == original:
-        fail(f"No changes were made to {LOOKUP} — patch did not match.")
-    LOOKUP.write_text(src, encoding="utf-8")
-    print(f"✅ Patched {LOOKUP}")
-
-
-def patch_i18n() -> None:
-    if not I18N.exists():
-        fail(f"{I18N} not found.")
-    src = I18N.read_text(encoding="utf-8")
-    original = src
-
-    old_line = "    adminPanel: 'Admin Panel', officers: 'Officers', addOfficer: 'Add Officer',\n"
-    must_contain(src, old_line, I18N, "English adminPanel translation key")
-    new_line = "    adminPanel: 'Supervisor Panel', officers: 'Officers', addOfficer: 'Add Officer',\n"
-    src = src.replace(old_line, new_line)
-
-    if src == original:
-        fail(f"No changes were made to {I18N} — patch did not match.")
-    I18N.write_text(src, encoding="utf-8")
-    print(f"✅ Patched {I18N} (Admin Panel → Supervisor Panel)")
-
-
-def main() -> None:
-    if not MOBILE.is_dir():
-        fail("mobile/ not found — run this script from the repo root.")
-
-    patch_vehicles()
-    patch_admin()
-    patch_lookup()
-    patch_i18n()
-
-    # ── Commit ───────────────────────────────────────────────────────────
-    subprocess.run(["git", "add", "-A"], check=True)
-    result = subprocess.run(["git", "diff", "--cached", "--quiet"])
-    if result.returncode == 0:
-        print("ℹ️  Nothing to commit.")
+def patch_file(path, replacements, label):
+    full = os.path.join(ROOT, path)
+    if not os.path.isfile(full):
+        print(f"⚠️  Skipping {label}: file not found at {path}")
         return
+    content = read(full)
+    original = content
+    for old, new in replacements:
+        if old in content:
+            content = content.replace(old, new)
+    if content != original:
+        write(full, content)
+        print(f"✅ Patched {path}")
+    else:
+        print(f"ℹ️  No changes applied to {path} (already patched or pattern not found)")
 
-    subprocess.run(
+
+def main():
+    backend_dir = os.path.join(ROOT, "backend")
+    mobile_dir = os.path.join(ROOT, "mobile")
+    if not os.path.isdir(backend_dir) or not os.path.isdir(mobile_dir):
+        fail("Could not find backend/ and mobile/ — run this from the project root.")
+
+    # ── 1. Responsive utility ────────────────────────────────────────────────
+    responsive_ts = """/**
+ * ParkiPay — Responsive scaling helpers
+ * Baseline device: 375x812 (iPhone 11/X-class). Scales paddings, font
+ * sizes, and heights so content fits without clipping on small phones
+ * (e.g. 320-360px wide) and doesn't look tiny on large/tablet screens.
+ */
+import { Dimensions, PixelRatio } from 'react-native';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+const BASE_W = 375;
+const BASE_H = 812;
+
+export type ScreenSize = 'small' | 'medium' | 'large';
+
+/** < 360px wide (e.g. iPhone SE / small Android) */
+export const isSmallDevice = SCREEN_W < 360;
+/** 360-414px wide (most modern phones) */
+export const isMediumDevice = SCREEN_W >= 360 && SCREEN_W < 414;
+/** >= 414px wide (Plus/Max phones, small tablets) */
+export const isLargeDevice = SCREEN_W >= 414;
+
+export function getScreenSize(): ScreenSize {
+  if (isSmallDevice) return 'small';
+  if (isMediumDevice) return 'medium';
+  return 'large';
+}
+
+/** Horizontal scale — widths, paddings, gaps */
+export function scale(size: number): number {
+  return (SCREEN_W / BASE_W) * size;
+}
+
+/** Vertical scale — heights, vertical spacing */
+export function verticalScale(size: number): number {
+  return (SCREEN_H / BASE_H) * size;
+}
+
+/**
+ * Moderate scale — best for font sizes. `factor` controls how aggressively
+ * it scales (0 = no scaling, 1 = full linear scaling). 0.5 is a good
+ * middle-ground default so text shrinks a little on small phones without
+ * becoming unreadable.
+ */
+export function moderateScale(size: number, factor = 0.5): number {
+  return size + (scale(size) - size) * factor;
+}
+
+/** Caps OS-level accessibility font scaling so layouts don't blow out. */
+export const MAX_FONT_SCALE = 1.2;
+
+/** Rounds to the nearest device pixel — avoids blurry borders/text. */
+export function pixelRound(size: number): number {
+  return PixelRatio.roundToNearestPixel(size);
+}
+"""
+    write(os.path.join(mobile_dir, "utils", "responsive.ts"), responsive_ts)
+    print("✅ Created mobile/utils/responsive.ts")
+
+    # ── 2. Global font scaling cap in root layout ──────────────────────────
+    layout_path = os.path.join(mobile_dir, "app", "_layout.tsx")
+    if os.path.isfile(layout_path):
+        content = read(layout_path)
+        if "MAX_FONT_SCALE" not in content:
+            content = content.replace(
+                "import { View, ActivityIndicator } from 'react-native';\nimport { useAuthStore } from '@/store/authStore';",
+                "import { View, ActivityIndicator, Text, TextInput } from 'react-native';\n"
+                "import { useAuthStore } from '@/store/authStore';\n"
+                "import { MAX_FONT_SCALE } from '@/utils/responsive';\n\n"
+                "// Global responsive guard: cap OS-level font scaling so large\n"
+                "// accessibility text settings don't blow out small-screen layouts,\n"
+                "// while still letting our own moderateScale() drive normal sizing.\n"
+                "// @ts-ignore - defaultProps exists at runtime on RN components\n"
+                "(Text as any).defaultProps = (Text as any).defaultProps || {};\n"
+                "(Text as any).defaultProps.maxFontSizeMultiplier = MAX_FONT_SCALE;\n"
+                "// @ts-ignore\n"
+                "(TextInput as any).defaultProps = (TextInput as any).defaultProps || {};\n"
+                "(TextInput as any).defaultProps.maxFontSizeMultiplier = MAX_FONT_SCALE;",
+            )
+            write(layout_path, content)
+            print("✅ Patched mobile/app/_layout.tsx (global font scaling cap)")
+        else:
+            print("ℹ️  mobile/app/_layout.tsx already has font scaling cap")
+    else:
+        print("⚠️  mobile/app/_layout.tsx not found, skipping")
+
+    # ── 3. admin.tsx: capitalize name, responsive sheet/header sizes ───────
+    patch_file(
+        "mobile/app/(app)/admin.tsx",
         [
-            "git",
-            "commit",
-            "-m",
-            "feat(mobile): name auto-capitalize + 3-name validation on owner/officer "
-            "forms, reuse lookup-screen plate format in vehicle registration, "
-            "move SMS note to bill-generated success modal, rename Admin Panel "
-            "to Supervisor Panel",
+            (
+                "import { SprintColors }              from '@/constants/theme';",
+                "import { SprintColors }              from '@/constants/theme';\n"
+                "import { moderateScale }             from '@/utils/responsive';\n\n"
+                "// Capitalizes the first letter of every word as the user types\n"
+                "// (e.g. \"juma ally\" -> \"Juma Ally\")\n"
+                "function toTitleCase(s: string): string {\n"
+                "  return s.replace(/\\w\\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));\n"
+                "}",
+            ),
+            (
+                "          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}\n"
+                "            value={newName} onChangeText={setNewName} placeholder=\"e.g. Juma Ally\"\n"
+                "            autoCapitalize=\"words\" placeholderTextColor={C.textMuted}/>",
+                "          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}\n"
+                "            value={newName} onChangeText={(v) => setNewName(toTitleCase(v))} placeholder=\"e.g. Juma Ally\"\n"
+                "            autoCapitalize=\"words\" placeholderTextColor={C.textMuted}/>",
+            ),
+            (
+                "  headerTitle:{ fontSize:18, fontWeight:'800', color:'#fff' },",
+                "  headerTitle:{ fontSize: moderateScale(18), fontWeight:'800', color:'#fff' },",
+            ),
+            (
+                "  sheetTitle:{ fontSize:18, fontWeight:'800', marginBottom:16 },\n"
+                "  inputLabel:{ fontSize:13, fontWeight:'600', marginBottom:6 },\n"
+                "  input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,\n"
+                "    fontSize:15, marginBottom:14 },",
+                "  sheetTitle:{ fontSize: moderateScale(18), fontWeight:'800', marginBottom:16 },\n"
+                "  inputLabel:{ fontSize: moderateScale(13), fontWeight:'600', marginBottom:6 },\n"
+                "  input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,\n"
+                "    fontSize: moderateScale(15), marginBottom:14 },",
+            ),
         ],
-        check=True,
+        "admin.tsx",
     )
-    print("✅ Committed")
-    print("\nNext: main is protected — push to a branch and open a PR:")
-    print("    git checkout -b feat/form-validation-and-ui-fixes")
-    print("    git push origin feat/form-validation-and-ui-fixes")
+
+    # ── 4. vehicles.tsx: capitalize owner name, remove SMS note, responsive sheet ──
+    patch_file(
+        "mobile/app/(app)/vehicles.tsx",
+        [
+            (
+                "import { SprintColors } from '@/constants/theme';",
+                "import { SprintColors } from '@/constants/theme';\n"
+                "import { moderateScale } from '@/utils/responsive';\n\n"
+                "function toTitleCase(s: string): string {\n"
+                "  return s.replace(/\\w\\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));\n"
+                "}",
+            ),
+            (
+                "            { label: 'Owner Full Name *', value: fOwnerName, setter: setFOwnerName, placeholder: 'e.g. Juma Ally Hassan' },",
+                "            { label: 'Owner Full Name *', value: fOwnerName,\n"
+                "              setter: (v: string) => setFOwnerName(toTitleCase(v)),\n"
+                "              placeholder: 'e.g. Juma Ally Hassan' },",
+            ),
+            (
+                "          <View style={S.infoNote}>\n"
+                "            <Ionicons name=\"information-circle-outline\" size={16} color={SprintColors.green} />\n"
+                "            <Text style={[S.infoNoteText, { color: C.textSub }]}>\n"
+                "              An SMS confirmation will be sent to the owner&apos;s phone number.\n"
+                "            </Text>\n"
+                "          </View>\n\n",
+                "",
+            ),
+            (
+                "    sheetTitle:{ fontSize:19, fontWeight:'900', marginBottom:18 },\n"
+                "    inputLabel:{ fontSize:13, fontWeight:'600', marginBottom:6 },\n"
+                "    input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,\n"
+                "      fontSize:15, marginBottom:2 },",
+                "    sheetTitle:{ fontSize: moderateScale(19), fontWeight:'900', marginBottom:18 },\n"
+                "    inputLabel:{ fontSize: moderateScale(13), fontWeight:'600', marginBottom:6 },\n"
+                "    input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,\n"
+                "      fontSize: moderateScale(15), marginBottom:2 },",
+            ),
+            (
+                "    headerTitle:{ fontSize:17, fontWeight:'800', color:'#fff', textAlign:'center' },",
+                "    headerTitle:{ fontSize: moderateScale(17), fontWeight:'800', color:'#fff', textAlign:'center' },",
+            ),
+        ],
+        "vehicles.tsx",
+    )
+
+    # ── 5. seed.js: clean-slate + zones + locations-per-zone ────────────────
+    seed_path = os.path.join(backend_dir, "prisma", "seed.js")
+    new_seed = """// ParkiPay — Development seed data
+// Wipes existing data, then seeds 5 zones (5 parking locations each),
+// two test officers, and one sample vehicle.
+//
+// ╔═══════════════════════════════════════════════════════════╗
+// ║                   TEST USER CREDENTIALS                   ║
+// ╠═══════════════════╦═════════════╦═════════════════════════╣
+// ║ Role              ║ Employee ID ║ Password                ║
+// ╠═══════════════════╬═════════════╬═════════════════════════╣
+// ║ Attendant         ║ TZ-0001     ║ Officer@1234            ║
+// ║ Supervisor        ║ SUP-0001    ║ Supervisor@1234         ║
+// ╚═══════════════════╩═════════════╩═════════════════════════╝
+//
+// Run:  npm run db:seed
+
+const { PrismaClient } = require('@prisma/client');
+const bcrypt           = require('bcryptjs');
+
+const prisma = new PrismaClient();
+
+// 5 zones across different regions, each with 5 sample parking locations.
+const ZONES = [
+  {
+    zoneName: 'Kinondoni Zone', region: 'Dar es Salaam', district: 'Kinondoni',
+    locations: [
+      'Kinondoni - Mwenge Bus Stand',
+      'Kinondoni - Sinza Market',
+      'Kinondoni - Magomeni Stand',
+      'Kinondoni - Kawe Beach Parking',
+      'Kinondoni - Makumbusho Terminal',
+    ],
+  },
+  {
+    zoneName: 'Ubungo Zone', region: 'Dar es Salaam', district: 'Ubungo',
+    locations: [
+      'Ubungo - Bus Terminal',
+      'Ubungo - Kibo Stand',
+      'Ubungo - Mabibo Market',
+      'Ubungo - Manzese Stand',
+      'Ubungo - Sayona Parking',
+    ],
+  },
+  {
+    zoneName: 'Temeke Zone', region: 'Dar es Salaam', district: 'Temeke',
+    locations: [
+      'Temeke - Mbagala Stand',
+      'Temeke - Tandika Market',
+      'Temeke - Buguruni Stand',
+      'Temeke - Mtoni Parking',
+      'Temeke - Chang\\'ombe Terminal',
+    ],
+  },
+  {
+    zoneName: 'Ilala Zone', region: 'Dar es Salaam', district: 'Ilala',
+    locations: [
+      'Ilala - Kariakoo Bus Stand',
+      'Ilala - Buguruni Market',
+      'Ilala - Ilala Boma Parking',
+      'Ilala - Tabata Stand',
+      'Ilala - Segerea Terminal',
+    ],
+  },
+  {
+    zoneName: 'Kigamboni Zone', region: 'Dar es Salaam', district: 'Kigamboni',
+    locations: [
+      'Kigamboni - Ferry Terminal',
+      'Kigamboni - Tungi Beach Parking',
+      'Kigamboni - Mjimwema Stand',
+      'Kigamboni - Kibada Market',
+      'Kigamboni - Vijibweni Stand',
+    ],
+  },
+];
+
+async function main() {
+  console.log('🌱 Seeding development data...');
+
+  // ── 0. Clean slate — remove all previous seed/test data ────────────────────
+  // Order matters: clear FK-dependent tables first.
+  await prisma.controlNumber.deleteMany({});
+  await prisma.auditLog.deleteMany({});
+  await prisma.officerBiometric.deleteMany({});
+  await prisma.officer.deleteMany({});
+  await prisma.vehicle.deleteMany({});
+  await prisma.parkingLocation.deleteMany({});
+  console.log('  🧹 Cleared previous seed data');
+
+  // ── 1. Zones + parking locations ────────────────────────────────────────────
+  // Each zone is itself a ParkingLocation (used for supervisor assignment),
+  // and each zone's sample stands/markets are ParkingLocations too (used
+  // for attendant assignment). All locations are looked up live by the
+  // mobile app's location dropdown via GET /api/admin/locations/.
+  const zoneRecords = {};      // zoneName -> ParkingLocation row (the zone itself)
+  const firstLocationByZone = {}; // zoneName -> first location row inside it
+
+  for (const zone of ZONES) {
+    const zoneRow = await prisma.parkingLocation.create({
+      data: {
+        name:          zone.zoneName,
+        region:        zone.region,
+        district:      zone.district,
+        feeMotorcycle: 500, feePrivateCar: 1000, feeMinibus: 2000,
+        feeBus: 3000, feeTruck: 5000, feeGovernment: 0,
+      },
+    });
+    zoneRecords[zone.zoneName] = zoneRow;
+    console.log(`  ✅ Zone: ${zoneRow.name} (${zone.region})`);
+
+    for (const locName of zone.locations) {
+      const loc = await prisma.parkingLocation.create({
+        data: {
+          name:          locName,
+          region:        zone.region,
+          district:      zone.district,
+          feeMotorcycle: 500, feePrivateCar: 1000, feeMinibus: 2000,
+          feeBus: 3000, feeTruck: 5000, feeGovernment: 0,
+        },
+      });
+      if (!firstLocationByZone[zone.zoneName]) firstLocationByZone[zone.zoneName] = loc;
+      console.log(`     • ${loc.name}`);
+    }
+  }
+
+  // ── 2. Sample vehicle ────────────────────────────────────────────────────────
+  const vehicle = await prisma.vehicle.create({
+    data: {
+      plateNumber: 'TZ001ABC',
+      ownerName:   'Juma Hassan',
+      ownerPhone:  '+255712345678',
+      ownerEmail:  'juma.hassan@example.com',
+      make:        'Toyota',
+      model:       'Corolla',
+      color:       'White',
+      year:        2018,
+      category:    'PRIVATE_CAR',
+    },
+  });
+  console.log(`  ✅ Sample vehicle: ${vehicle.plateNumber} (${vehicle.ownerName})`);
+
+  // ── 3. Supervisor (test, SUP-XXXX format) — assigned to Kinondoni Zone ──────
+  const supervisor = await prisma.officer.create({
+    data: {
+      employeeId:   'SUP-0001',
+      fullName:     'Test Supervisor',
+      phone:        '+255700000002',
+      email:        'supervisor@parkipay.go.tz',
+      role:         'SUPERVISOR',
+      passwordHash: await bcrypt.hash('Supervisor@1234', 12),
+      locationId:   zoneRecords['Kinondoni Zone'].id,
+    },
+  });
+  console.log(`  ✅ Supervisor: ${supervisor.employeeId} (password: Supervisor@1234) -> Kinondoni Zone`);
+
+  // ── 4. Attendant (TZ-XXXX format) — assigned to a stand inside Kinondoni ───
+  const attendantLocation = firstLocationByZone['Kinondoni Zone'];
+  const attendant = await prisma.officer.create({
+    data: {
+      employeeId:   'TZ-0001',
+      fullName:     'John Mwangi',
+      phone:        '+255712345678',
+      email:        'j.mwangi@parkipay.go.tz',
+      role:         'ATTENDANT',
+      passwordHash: await bcrypt.hash('Officer@1234', 12),
+      locationId:   attendantLocation.id,
+    },
+  });
+  console.log(`  ✅ Attendant: ${attendant.employeeId} (password: Officer@1234) -> ${attendantLocation.name}`);
+
+  console.log('\\n🎉 Seed complete. You can log in with:');
+  console.log('   Attendant:   TZ-0001    / Officer@1234');
+  console.log('   Supervisor:  SUP-0001   / Supervisor@1234');
+  console.log(`\\n   Seeded ${ZONES.length} zones x 5 locations each = ${ZONES.length * 5} parking locations.`);
+}
+
+main()
+  .catch((err) => {
+    console.error('❌ Seed failed:', err);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
+"""
+    write(seed_path, new_seed)
+    print("✅ Rewrote backend/prisma/seed.js (clean-slate zones + locations seed)")
+
+    print()
+    print("🎉 Patch 4 applied.")
+    print()
+    print("Next steps:")
+    print("  cd backend")
+    print("  npx prisma db seed")
+    print()
+    print("Notes / things confirmed already correct and left untouched:")
+    print("  - Add Officer location dropdown already pulls live from")
+    print("    GET /api/admin/locations/ (no hardcoded list).")
+    print("  - New officers/vehicles already reappear in their lists right")
+    print("    after creation (load() is called post-save).")
+    print("  - Bill-generation success screen (lookup.tsx) already shows the")
+    print("    'SMS sent to owner' note — that's the correct place for it.")
+    print("  - Full responsive refactor of every screen's exact pixel values")
+    print("    is out of scope for one patch; this patch lays the scaling")
+    print("    foundation (mobile/utils/responsive.ts + global font cap) and")
+    print("    applies it to the two forms named in the request. Apply")
+    print("    moderateScale()/scale() the same way in other screens as needed.")
 
 
 if __name__ == "__main__":
