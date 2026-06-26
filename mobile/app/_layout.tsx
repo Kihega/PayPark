@@ -5,8 +5,19 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text, TextInput } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
+import { MAX_FONT_SCALE } from '@/utils/responsive';
+
+// Global responsive guard: cap OS-level font scaling so large
+// accessibility text settings don't blow out small-screen layouts,
+// while still letting our own moderateScale() drive normal sizing.
+// @ts-ignore - defaultProps exists at runtime on RN components
+(Text as any).defaultProps = (Text as any).defaultProps || {};
+(Text as any).defaultProps.maxFontSizeMultiplier = MAX_FONT_SCALE;
+// @ts-ignore
+(TextInput as any).defaultProps = (TextInput as any).defaultProps || {};
+(TextInput as any).defaultProps.maxFontSizeMultiplier = MAX_FONT_SCALE;
 
 export const unstable_settings = { anchor: '(auth)' };
 

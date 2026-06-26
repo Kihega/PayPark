@@ -14,6 +14,13 @@ import { useSettingsStore, palette } from '@/store/settingsStore';
 import { t }                         from '@/constants/i18n';
 import { adminService }              from '@/services/api';
 import { SprintColors }              from '@/constants/theme';
+import { moderateScale }             from '@/utils/responsive';
+
+// Capitalizes the first letter of every word as the user types
+// (e.g. "juma ally" -> "Juma Ally")
+function toTitleCase(s: string): string {
+  return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
+}
 
 interface Officer  { id:number; employeeId:string; fullName:string; locationName:string|null; role:string; }
 interface Location { id:number; name:string; region:string; }
@@ -21,6 +28,21 @@ interface Location { id:number; name:string; region:string; }
 const ROLE_COLORS: Record<string,string> = {
   ATTENDANT: SprintColors.green, SUPERVISOR: '#1565C0',
 };
+
+// ── Full-name formatting (shared pattern: title-case + 3-name check) ───────
+// Auto-capitalizes each word as the user types, e.g. "juma ally hassan"
+// -> "Juma Ally Hassan". Does not trim while typing (so trailing spaces
+// while the user is still composing a word are preserved).
+function formatFullName(raw: string): string {
+  return raw.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// True only when the trimmed name has exactly 3 space-separated parts
+// (first, middle, surname) and none of them are empty.
+function isThreeNames(raw: string): boolean {
+  const parts = raw.trim().split(/\s+/).filter(Boolean);
+  return parts.length === 3;
+}
 const { width: W } = Dimensions.get('window');
 const SIDEBAR_W    = W * 0.75;
 
@@ -37,6 +59,7 @@ export default function AdminScreen() {
   const [showMove,  setShowMove]  = useState<Officer|null>(null);
   const [newName,   setNewName]   = useState('');
   const [newEmpId,  setNewEmpId]  = useState('');
+  const [nameError,  setNameError]  = useState(false);
   const [newLocId,  setNewLocId]  = useState<number|null>(null);
   const [saving,    setSaving]    = useState(false);
 
@@ -78,11 +101,16 @@ export default function AdminScreen() {
 
   const handleAdd = async () => {
     if (!newName.trim() || !newEmpId.trim()) return;
+    if (!isThreeNames(newName)) {
+      setNameError(true);
+      return;
+    }
     setSaving(true);
     try {
       await adminService.createOfficer({ fullName: newName.trim(),
         employeeId: newEmpId.trim(), locationId: newLocId });
       setShowAdd(false); setNewName(''); setNewEmpId(''); setNewLocId(null);
+      setNameError(false);
       load();
     } catch { /* silent */ }
     finally { setSaving(false); }
@@ -352,9 +380,22 @@ export default function AdminScreen() {
           <Text style={[S.sheetTitle, { color: C.text }]}>{tr('addOfficer')}</Text>
 
           <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('officerName')}</Text>
-          <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
-            value={newName} onChangeText={setNewName} placeholder="e.g. Juma Ally"
-            autoCapitalize="words" placeholderTextColor={C.textMuted}/>
+          <TextInput
+            style={[S.input, { color: C.text, backgroundColor: C.bg,
+              borderColor: nameError ? '#EF4444' : C.border }]}
+            value={newName}
+            onChangeText={(text) => {
+              const formatted = formatFullName(text);
+              setNewName(formatted);
+              setNameError(formatted.length > 0 && !isThreeNames(formatted));
+            }}
+            placeholder="e.g. Juma Ally Hassan"
+            autoCapitalize="words"
+            placeholderTextColor={C.textMuted}
+          />
+          <Text style={[S.inputHintSmall, { color: nameError ? '#EF4444' : C.textSub }]}>
+            Enter first, middle, and surname (e.g. Juma Ally Hassan)
+          </Text>
 
           <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('employeeIdLabel')}</Text>
           <TextInput style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
@@ -476,7 +517,7 @@ const styles = StyleSheet.create({
     paddingHorizontal:16, paddingVertical:14 },
   menuBtn:{ width:38, height:38, borderRadius:10, alignItems:'center',
     justifyContent:'center', backgroundColor:'rgba(255,255,255,0.1)' },
-  headerTitle:{ fontSize:18, fontWeight:'800', color:'#fff' },
+  headerTitle:{ fontSize: moderateScale(18), fontWeight:'800', color:'#fff' },
   // List
   emptyWrap:{ alignItems:'center', marginTop:60, gap:12 },
   emptyText:{ fontSize:15 },
@@ -498,10 +539,11 @@ const styles = StyleSheet.create({
   fabText:{ color:'#fff', fontWeight:'800', fontSize:14 },
   backdrop:{ flex:1, backgroundColor:'rgba(0,0,0,0.5)' },
   sheet:{ borderTopLeftRadius:20, borderTopRightRadius:20, padding:24, paddingBottom:40 },
-  sheetTitle:{ fontSize:18, fontWeight:'800', marginBottom:16 },
-  inputLabel:{ fontSize:13, fontWeight:'600', marginBottom:6 },
-  input:{ height:48, borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
-    fontSize:15, marginBottom:14 },
+  sheetTitle:{ fontSize: moderateScale(18), fontWeight:'800', marginBottom:16 },
+  inputLabel:{ fontSize: moderateScale(13), fontWeight:'600', marginBottom:6 },
+  input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
+    fontSize: moderateScale(15), marginBottom:14 },
+  inputHintSmall:{ fontSize:11, marginTop:-8, marginBottom:14 },
   locGrid:{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:20 },
   locChip:{ paddingHorizontal:12, paddingVertical:7, borderRadius:20,
     backgroundColor:'rgba(30,181,58,0.08)', borderWidth:1.5,

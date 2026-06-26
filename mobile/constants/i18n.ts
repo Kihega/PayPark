@@ -20,7 +20,7 @@ const translations: Record<Language, Record<string,string>> = {
     theme: 'Theme', lightMode: 'Light', darkMode: 'Dark',
     logout: 'Logout', logoutConfirm: 'Are you sure you want to logout?',
     yes: 'Yes, Logout', no: 'Cancel', paid: 'PAID', pending: 'PENDING',
-    adminPanel: 'Admin Panel', officers: 'Officers', addOfficer: 'Add Officer',
+    adminPanel: 'Supervisor Panel', officers: 'Officers', addOfficer: 'Add Officer',
     officerName: 'Full Name', location: 'Parking Location', role: 'Role',
     remove: 'Remove', moveLocation: 'Move', save: 'Save', cancel: 'Cancel',
     confirmRemove: 'Remove this officer?', employeeIdLabel: 'Employee ID',
