@@ -4,6 +4,7 @@
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/theme';
+import { moderateScale } from '@/utils/responsive';
 
 type Status = 'ACTIVE' | 'EXPIRED' | 'PAID' | string;
 
@@ -58,6 +59,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   labelSmall: {
-    fontSize: 9,
+    fontSize: moderateScale(9),
   },
 });

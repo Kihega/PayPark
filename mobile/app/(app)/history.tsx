@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { useSettingsStore, palette } from '@/store/settingsStore';
 import { billingService } from '@/services/api';
 import { SprintColors } from '@/constants/theme';
+import { moderateScale } from '@/utils/responsive';
 
 interface Bill {
   id: number;
@@ -222,26 +223,26 @@ function makeStyles(C: ReturnType<typeof palette>) {
       paddingHorizontal: 16, paddingVertical: 14 },
     backBtn: { width: 38, height: 38, borderRadius: 10, alignItems: 'center',
       justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
-    headerTitle: { fontSize: 17, fontWeight: '800', color: '#fff', textAlign: 'center' },
-    headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.6)', textAlign: 'center' },
+    headerTitle: { fontSize: moderateScale(17), fontWeight: '800', color: '#fff', textAlign: 'center' },
+    headerSub: { fontSize: moderateScale(11), color: 'rgba(255,255,255,0.6)', textAlign: 'center' },
     summaryRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 12, marginBottom: 4,
       borderRadius: 14, padding: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06, shadowRadius: 6, elevation: 3 },
     summaryItem: { flex: 1, alignItems: 'center', gap: 4 },
-    summaryVal: { fontSize: 16, fontWeight: '800' },
-    summaryLabel: { fontSize: 10, fontWeight: '600' },
+    summaryVal: { fontSize: moderateScale(16), fontWeight: '800' },
+    summaryLabel: { fontSize: moderateScale(10), fontWeight: '600' },
     filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
     filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
       backgroundColor: 'rgba(30,181,58,0.08)', borderWidth: 1.5,
       borderColor: 'rgba(30,181,58,0.3)' },
     filterActive: { backgroundColor: SprintColors.green, borderColor: SprintColors.green },
-    filterText: { fontSize: 11, fontWeight: '700', color: SprintColors.green },
+    filterText: { fontSize: moderateScale(11), fontWeight: '700', color: SprintColors.green },
     emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },
-    emptyTitle: { fontSize: 16, fontWeight: '700' },
-    emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+    emptyTitle: { fontSize: moderateScale(16), fontWeight: '700' },
+    emptySub: { fontSize: moderateScale(13), textAlign: 'center', lineHeight: 20 },
     dateHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10 },
     dateLine: { flex: 1, height: 1 },
-    dateLabel: { fontSize: 12, fontWeight: '700' },
+    dateLabel: { fontSize: moderateScale(12), fontWeight: '700' },
     card: { borderRadius: 14, marginBottom: 10, flexDirection: 'row', overflow: 'hidden',
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06, shadowRadius: 5, elevation: 3 },
@@ -251,15 +252,15 @@ function makeStyles(C: ReturnType<typeof palette>) {
       marginBottom: 8 },
     plateChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
       borderWidth: 1.5, borderColor: '#1A1A1A', backgroundColor: '#fff' },
-    plateChipText: { fontSize: 14, fontWeight: '900', letterSpacing: 2, color: '#1A1A1A' },
+    plateChipText: { fontSize: moderateScale(14), fontWeight: '900', letterSpacing: 2, color: '#1A1A1A' },
     statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5,
       paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    statusText: { fontSize: 10, fontWeight: '800' },
+    statusText: { fontSize: moderateScale(10), fontWeight: '800' },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
-    infoText: { fontSize: 12 },
+    infoText: { fontSize: moderateScale(12) },
     cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
-    amount: { fontSize: 15, fontWeight: '800' },
-    time: { fontSize: 12 },
+    amount: { fontSize: moderateScale(15), fontWeight: '800' },
+    time: { fontSize: moderateScale(12) },
   });
 }

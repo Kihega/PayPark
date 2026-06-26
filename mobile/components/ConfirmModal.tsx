@@ -5,6 +5,7 @@
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettingsStore, palette } from '@/store/settingsStore';
+import { moderateScale } from '@/utils/responsive';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info' | 'success';
 
@@ -87,8 +88,8 @@ const S = StyleSheet.create({
     width: 64, height: 64, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  title: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
-  message: { fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24 },
+  title: { fontSize: moderateScale(18), fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  message: { fontSize: moderateScale(14), textAlign: 'center', lineHeight: 21, marginBottom: 24 },
   btnRow: { flexDirection: 'row', gap: 12, width: '100%' },
   btn: {
     flex: 1, height: 48, borderRadius: 12,
@@ -96,6 +97,6 @@ const S = StyleSheet.create({
   },
   cancelBtn: { borderWidth: 1.5 },
   confirmBtn: {},
-  cancelText: { fontWeight: '600', fontSize: 14 },
-  confirmText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  cancelText: { fontWeight: '600', fontSize: moderateScale(14) },
+  confirmText: { color: '#fff', fontWeight: '800', fontSize: moderateScale(14) },
 });
