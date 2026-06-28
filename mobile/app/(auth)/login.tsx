@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSettingsStore } from '@/store/settingsStore';
 import { t } from '@/constants/i18n';
 import { Colors, SprintColors, Shadows } from '@/constants/theme';
+import { moderateScale } from '@/utils/responsive';
 
 // Accepted final formats
 const ATTENDANT_RE  = /^TZ-\d{4}$/;
@@ -191,29 +192,29 @@ const styles = StyleSheet.create({
   scroll:     { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40, justifyContent: 'center' },
   header:     { alignItems: 'center', paddingTop: 60, paddingBottom: 28 },
   accent:     { width: 180, height: 4, borderRadius: 2, marginBottom: 16 },
-  logo:       { fontSize: 36, fontWeight: '900', letterSpacing: 1 },
-  sub1:       { fontSize: 13, color: '#404040', marginTop: 4 },
-  sub2:       { fontSize: 13, color: '#737373' },
+  logo:       { fontSize: moderateScale(36), fontWeight: '900', letterSpacing: 1 },
+  sub1:       { fontSize: moderateScale(13), color: '#404040', marginTop: 4 },
+  sub2:       { fontSize: moderateScale(13), color: '#737373' },
   card:       { backgroundColor: '#fff', borderRadius: 16, padding: 24, ...Shadows.md },
-  title:      { fontSize: 28, fontWeight: '800', textAlign: 'center', color: '#1A1A1A', marginBottom: 4 },
-  subtitle:   { fontSize: 13, color: '#595959', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  label:      { fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 6 },
+  title:      { fontSize: moderateScale(28), fontWeight: '800', textAlign: 'center', color: '#1A1A1A', marginBottom: 4 },
+  subtitle:   { fontSize: moderateScale(13), color: '#595959', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  label:      { fontSize: moderateScale(13), fontWeight: '700', color: '#1A1A1A', marginBottom: 6 },
   inputRow:   {
     flexDirection: 'row', alignItems: 'center', height: 54,
     borderWidth: 1.5, borderColor: '#D1D5DB', borderRadius: 12, backgroundColor: '#fff',
   },
   inputErr:   { borderColor: Colors.error },
-  input:      { flex: 1, fontSize: 15, color: '#1A1A1A', paddingHorizontal: 10 },
-  formatHint: { fontSize: 11, color: '#9CA3AF', marginTop: 5, marginBottom: 2 },
+  input:      { flex: 1, fontSize: moderateScale(15), color: '#1A1A1A', paddingHorizontal: 10 },
+  formatHint: { fontSize: moderateScale(11), color: '#9CA3AF', marginTop: 5, marginBottom: 2 },
   errBox:     {
     flexDirection: 'row', alignItems: 'flex-start', gap: 6,
     backgroundColor: Colors.errorSurface, borderRadius: 10, padding: 10,
     marginTop: 8, borderLeftWidth: 3, borderLeftColor: Colors.error,
   },
-  errText:    { fontSize: 13, color: Colors.error, flex: 1, lineHeight: 18 },
+  errText:    { fontSize: moderateScale(13), color: Colors.error, flex: 1, lineHeight: 18 },
   btn:        {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     height: 56, backgroundColor: '#0D1117', borderRadius: 12, marginTop: 20,
   },
-  btnText:    { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
+  btnText:    { color: '#fff', fontSize: moderateScale(15), fontWeight: '700', letterSpacing: 0.4 },
 });
