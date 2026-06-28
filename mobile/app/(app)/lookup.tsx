@@ -40,9 +40,9 @@ import { vehicleService, billingService } from '@/services/api';
 import { SprintColors }               from '@/constants/theme';
 import ConfirmModal                   from '@/components/ConfirmModal';
 import {
-import { moderateScale } from '@/utils/responsive';
   pushBillSuccess, pushDuplicateAlert, pushBillFailed,
 } from '@/services/alertsService';
+import { moderateScale } from '@/utils/responsive';
 
 // ── Plate helpers ──────────────────────────────────────────────────────────
 // Tanzania: T + 3 digits + 3 uppercase letters  → e.g. T000AAA

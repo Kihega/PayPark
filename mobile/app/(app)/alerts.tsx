@@ -15,10 +15,10 @@ import { useSettingsStore, palette } from '@/store/settingsStore';
 import { billingService } from '@/services/api';
 import { SprintColors } from '@/constants/theme';
 import {
-import { moderateScale } from '@/utils/responsive';
   getAlerts, markAllRead, clearAlerts,
   type LocalAlert,
 } from '@/services/alertsService';
+import { moderateScale } from '@/utils/responsive';
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-TZ', { hour: '2-digit', minute: '2-digit', hour12: true });
