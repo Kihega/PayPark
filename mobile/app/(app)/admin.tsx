@@ -3,8 +3,8 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
-  ActivityIndicator, Animated, Dimensions, FlatList, Modal,
-  Platform, Pressable, SafeAreaView, StatusBar, StyleSheet,
+  ActivityIndicator, Animated, Dimensions, FlatList, KeyboardAvoidingView, Modal,
+  Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -376,7 +376,17 @@ export default function AdminScreen() {
       {/* ══ Add Officer Modal ════════════════════════════════════════ */}
       <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
         <Pressable style={S.backdrop} onPress={() => setShowAdd(false)}/>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={S.sheetKav}
+          pointerEvents="box-none"
+        >
         <View style={[S.sheet, { backgroundColor: C.card }]}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 8 }}
+          >
           <Text style={[S.sheetTitle, { color: C.text }]}>{tr('addOfficer')}</Text>
 
           <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('officerName')}</Text>
@@ -437,13 +447,16 @@ export default function AdminScreen() {
             {saving ? <ActivityIndicator color="#fff"/> :
               <Text style={S.saveBtnText}>{tr('save')}</Text>}
           </TouchableOpacity>
+          </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ══ Move Location Modal ═══════════════════════════════════════ */}
       <Modal visible={!!showMove} transparent animationType="slide" onRequestClose={() => setShowMove(null)}>
         <Pressable style={S.backdrop} onPress={() => setShowMove(null)}/>
         <View style={[S.sheet, { backgroundColor: C.card }]}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
           <Text style={[S.sheetTitle, { color: C.text }]}>
             {tr('moveLocation')}: {showMove?.fullName}
           </Text>
@@ -454,6 +467,7 @@ export default function AdminScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          </ScrollView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -538,7 +552,9 @@ const styles = StyleSheet.create({
     shadowOpacity:0.4, shadowRadius:8, elevation:8 },
   fabText:{ color:'#fff', fontWeight:'800', fontSize: moderateScale(14) },
   backdrop:{ flex:1, backgroundColor:'rgba(0,0,0,0.5)' },
-  sheet:{ borderTopLeftRadius:20, borderTopRightRadius:20, padding:24, paddingBottom:40 },
+  sheetKav:{ justifyContent:'flex-end' },
+  sheet:{ borderTopLeftRadius:20, borderTopRightRadius:20, padding:24, paddingBottom:24,
+    maxHeight:'85%' },
   sheetTitle:{ fontSize: moderateScale(18), fontWeight:'800', marginBottom:16 },
   inputLabel:{ fontSize: moderateScale(13), fontWeight:'600', marginBottom:6 },
   input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,

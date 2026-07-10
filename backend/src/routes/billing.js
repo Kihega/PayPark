@@ -18,6 +18,34 @@ const {
   generateControlNumber,
   getActiveBillForPlate,
 } = require('../lib/controlNumber');
+const { isValidTzMobile } = require('../lib/phone');
+
+// ── Swahili SMS bill formatter ────────────────────────────────────────────
+// Dar es Salaam is UTC+3 year-round (no DST), so a fixed-offset format
+// avoids depending on the server's local timezone/ICU data.
+function fmtDarEsSalaam(date) {
+  const d = new Date(date.getTime() + 3 * 60 * 60 * 1000); // shift to EAT
+  const pad = (n) => String(n).padStart(2, '0');
+  const day   = pad(d.getUTCDate());
+  const month = pad(d.getUTCMonth() + 1);
+  const year  = d.getUTCFullYear();
+  const hh    = pad(d.getUTCHours());
+  const mm    = pad(d.getUTCMinutes());
+  return `${day}/${month}/${year} ${hh}:${mm}`;
+}
+
+function buildBillSms({ ownerName, plateNumber, controlNumber, amountDue, locationName, generatedAt, expiresAt }) {
+  const amountFmt = `TZS ${Number(amountDue).toLocaleString('en-US')}`;
+  return (
+    `ParkiPay: Bili ya maegesho - ${locationName}\n` +
+    `Gari: ${plateNumber}\n` +
+    `Namba ya Udhibiti: ${controlNumber}\n` +
+    `Kiasi cha Kulipa: ${amountFmt}\n` +
+    `Muda wa Kutolewa: ${fmtDarEsSalaam(new Date(generatedAt))}\n` +
+    `Inaisha: ${fmtDarEsSalaam(new Date(expiresAt))}\n` +
+    `Lipa kupitia namba ya udhibiti hapo juu kabla ya muda kuisha. Asante kwa kutumia ParkiPay.`
+  );
+}
 
 const router = Router();
 router.use(authenticate);
@@ -117,21 +145,23 @@ router.post('/generate/', async (req, res, next) => {
     await redis.cacheSet(billCacheKey, bill, ACTIVE_BILL_TTL);
     await redis.cacheDel(`stats:${req.officer.id}`);
 
-    // ── 7. SMS to vehicle owner (if registered) ───────────────────────────
-    if (vehicle?.ownerPhone) {
+    // ── 7. SMS to vehicle owner (if registered + valid TZ number) ─────────
+    if (vehicle?.ownerPhone && isValidTzMobile(vehicle.ownerPhone)) {
       const { sendSMS } = require('../lib/sms');
-      const startTime = new Date(bill.generatedAt);
-      const endTime   = new Date(bill.expiresAt);
-      const fmt = (d) => d.toTimeString().slice(0, 8); // HH:MM:SS
-
-      const smsText =
-        `Habari ndugu ${vehicle.ownerName},\n` +
-        `Nambari yako ya malipo ya maegesho ya ${location.name} ni ${bill.controlNumber}.\n` +
-        `Muda wa kuanza: ${fmt(startTime)}\n` +
-        `Muda wa kuisha: ${fmt(endTime)}`;
+      const smsText = buildBillSms({
+        ownerName:     vehicle.ownerName,
+        plateNumber:   bill.plateNumber,
+        controlNumber: bill.controlNumber,
+        amountDue:     bill.amountDue,
+        locationName:  location.name,
+        generatedAt:   bill.generatedAt,
+        expiresAt:     bill.expiresAt,
+      });
 
       sendSMS(vehicle.ownerPhone, smsText).catch((e) =>
         console.error('[Billing] SMS fire-and-forget error:', e.message));
+    } else if (vehicle?.ownerPhone) {
+      console.warn(`[Billing] Skipped SMS — invalid TZ mobile number on file: ${vehicle.ownerPhone}`);
     }
 
     await logAction(req.officer, logAction.ACTIONS.BILL_GENERATED, {

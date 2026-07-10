@@ -6,8 +6,8 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
-  ActivityIndicator, Alert, FlatList, Modal, Pressable,
-  SafeAreaView, StyleSheet, Text, TextInput,
+  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform,
+  Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import { useSettingsStore, palette } from '@/store/settingsStore';
 import { vehicleRegistryService } from '@/services/api';
 import { SprintColors } from '@/constants/theme';
 import { moderateScale } from '@/utils/responsive';
+import { isPartialTzMobileValid, isValidTzMobile } from '@/utils/phone';
 
 function toTitleCase(s: string): string {
   return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
@@ -98,6 +99,7 @@ export default function VehiclesScreen() {
   const [fPlate,      setFPlate]      = useState('');
   const [nameError,   setNameError]   = useState(false);
   const [plateError,  setPlateError]  = useState(false);
+  const [phoneError,  setPhoneError]  = useState(false);
   const [fMake,       setFMake]       = useState('');
   const [fModel,      setFModel]      = useState('');
   const [fCategory,   setFCategory]   = useState('PRIVATE_CAR');
@@ -116,7 +118,7 @@ export default function VehiclesScreen() {
   const resetForm = () => {
     setFOwnerName(''); setFPhone(''); setFPlate('');
     setFMake(''); setFModel(''); setFCategory('PRIVATE_CAR');
-    setNameError(false); setPlateError(false);
+    setNameError(false); setPlateError(false); setPhoneError(false);
   };
 
   const handleRegister = async () => {
@@ -126,6 +128,11 @@ export default function VehiclesScreen() {
     if (!isThreeNames(fOwnerName)) {
       setNameError(true);
       Alert.alert('', 'Enter the owner\'s full name as three names: first, middle, and surname.');
+      return;
+    }
+    if (!isValidTzMobile(fPhone)) {
+      setPhoneError(true);
+      Alert.alert('', 'Enter a valid Tanzanian mobile number (e.g. 07XXXXXXXX, 06XXXXXXXX, or +255XXXXXXXXX).');
       return;
     }
     const plateClean = fPlate.trim().toUpperCase().replace(/\s/g, '');
@@ -244,8 +251,18 @@ export default function VehiclesScreen() {
       {/* ── Add Vehicle Modal ─────────────────────────────────────────── */}
       <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
         <Pressable style={S.backdrop} onPress={() => setShowAdd(false)} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={S.sheetKav}
+          pointerEvents="box-none"
+        >
         <View style={[S.sheet, { backgroundColor: C.card }]}>
           <View style={S.sheetHandle} />
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 8 }}
+          >
           <Text style={[S.sheetTitle, { color: C.text }]}>Register Vehicle</Text>
 
           {/* Owner Full Name — auto-capitalize each word, require 3 names */}
@@ -272,13 +289,21 @@ export default function VehiclesScreen() {
           <View style={{ marginBottom: 12 }}>
             <Text style={[S.inputLabel, { color: C.textSub }]}>Phone Number *</Text>
             <TextInput
-              style={[S.input, { color: C.text, borderColor: C.border, backgroundColor: C.bg }]}
+              style={[S.input, { color: C.text, backgroundColor: C.bg,
+                borderColor: phoneError ? '#EF4444' : C.border }]}
               value={fPhone}
-              onChangeText={setFPhone}
-              placeholder="+255 7XX XXX XXX"
+              onChangeText={(text) => {
+                setFPhone(text);
+                setPhoneError(text.trim().length > 0 && !isPartialTzMobileValid(text));
+              }}
+              placeholder="07XX XXX XXX"
               placeholderTextColor={C.textMuted}
               keyboardType="phone-pad"
+              maxLength={13}
             />
+            <Text style={[S.hintSmall, { color: phoneError ? '#EF4444' : C.textMuted }]}>
+              Format: 07XXXXXXXX, 06XXXXXXXX, or +255XXXXXXXXX
+            </Text>
           </View>
 
           {/* Plate Number — same format/validation as attendant Vehicle Lookup */}
@@ -343,7 +368,9 @@ export default function VehiclesScreen() {
                 </>
             }
           </TouchableOpacity>
+          </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
       {/* ══ Registration Success Modal ════════════════════════════ */}
       <Modal visible={showSuccessModal} transparent animationType="fade"
@@ -428,8 +455,9 @@ function makeStyles(C: ReturnType<typeof palette>) {
       shadowOpacity:0.4, shadowRadius:8, elevation:8 },
     fabText:{ color:'#fff', fontWeight:'800', fontSize: moderateScale(14) },
     backdrop:{ flex:1, backgroundColor:'rgba(0,0,0,0.5)' },
-    sheet:{ borderTopLeftRadius:24, borderTopRightRadius:24, padding:24, paddingBottom:40,
-      maxHeight:'92%' },
+    sheetKav:{ justifyContent:'flex-end' },
+    sheet:{ borderTopLeftRadius:24, borderTopRightRadius:24, padding:24, paddingBottom:24,
+      maxHeight:'85%' },
     sheetHandle:{ width:40, height:4, borderRadius:2, backgroundColor:'rgba(0,0,0,0.15)',
       alignSelf:'center', marginBottom:16 },
     sheetTitle:{ fontSize: moderateScale(19), fontWeight:'900', marginBottom:18 },
