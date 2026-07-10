@@ -18,6 +18,7 @@ const { z }      = require('zod');
 const prisma     = require('../lib/prisma');
 const redis      = require('../lib/redis');
 const { sendSMS } = require('../lib/sms');
+const { isValidTzMobile, normalizeTzMobile } = require('../lib/phone');
 const { authenticate } = require('../middleware/auth');
 
 const router = Router();
@@ -166,7 +167,9 @@ router.get('/vehicles/', async (req, res, next) => {
 const RegisterVehicleSchema = z.object({
   plateNumber: z.string().min(3).max(15),
   ownerName:   z.string().min(2),
-  ownerPhone:  z.string().min(10).max(15),
+  ownerPhone:  z.string().min(10).max(15).refine(isValidTzMobile, {
+    message: 'ownerPhone must be a valid Tanzanian mobile number (e.g. 07XXXXXXXX, 06XXXXXXXX, or +255XXXXXXXXX).',
+  }),
   make:        z.string().optional().default(''),
   model:       z.string().optional().default(''),
   category:    z.enum(['MOTORCYCLE','PRIVATE_CAR','MINIBUS','BUS','TRUCK','GOVERNMENT'])
@@ -179,8 +182,9 @@ router.post('/vehicles/', async (req, res, next) => {
     if (!parsed.success)
       return res.status(400).json({ error: 'validation_error', detail: parsed.error.flatten() });
 
-    const { plateNumber: rawPlate, ownerName, ownerPhone, make, model, category } = parsed.data;
+    const { plateNumber: rawPlate, ownerName, ownerPhone: rawPhone, make, model, category } = parsed.data;
     const plateNumber = rawPlate.trim().toUpperCase().replace(/\s+/g, '');
+    const ownerPhone  = normalizeTzMobile(rawPhone); // always store the canonical 255XXXXXXXXX form
 
     const existing = await prisma.vehicle.findUnique({ where: { plateNumber } });
     if (existing)
@@ -196,7 +200,7 @@ router.post('/vehicles/', async (req, res, next) => {
     // Send SMS to owner with registration confirmation
     const smsText =
       `ParkiPay: Gari lako (${plateNumber}) limesajiliwa kwenye mfumo wa maegesho. ` +
-      `Ukipata faini utapokea ujumbe mwingine. Asante!`;
+      `Utapokea SMS yenye maelezo kamili ya bili kila utakapotozwa maegesho. Asante!`;
     const smsResult = await sendSMS(ownerPhone, smsText);
     if (!smsResult.success) {
       console.warn('[Admin] Vehicle registered but SMS failed:', smsResult.error);
