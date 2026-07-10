@@ -35,7 +35,7 @@ function getLocalDevUrl(): string {
 
 // ── Production URL ────────────────────────────────────────────────────────────
 
-const PRODUCTION_API_URL = 'https://paypark-backend-6kc4.onrender.com';
+const PRODUCTION_API_URL = 'https://paypark-8huj.onrender.com';
 
 // ── Resolved base URL ─────────────────────────────────────────────────────────
 
