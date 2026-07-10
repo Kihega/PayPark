@@ -1,104 +1,139 @@
 /**
- * ParkiPay — SMS via Twilio REST API (no SDK, pure Node.js https)
+ * ParkiPay — SMS via Meseji (https://meseji.co.tz/docs)
  *
- * Required env vars:
- *   TWILIO_ACCOUNT_SID   → AC... from Twilio Console
- *   TWILIO_AUTH_TOKEN    → Auth Token from Twilio Console
- *   TWILIO_PHONE_NUMBER  → your Twilio number e.g. +12345678900
- *
- * Trial account limitation: can only send to VERIFIED numbers.
- * Verify numbers at: https://console.twilio.com/us1/develop/phone-numbers/manage/verified
+ * Required env var:
+ *   MESEJI_API_KEY   → API key from the Meseji dashboard (starts
+ *                       with 'zs_'); sent as the `x-api-key` header.
+ * Optional env vars:
+ *   MESEJI_SENDER_ID → Sender name shown on the recipient's phone.
+ *                       Defaults to 'MESEJI', the pre-approved
+ *                       default sender every account gets. A custom
+ *                       sender ID (e.g. 'ParkiPay') must be requested
+ *                       via POST /sms/request-sender-id and approved
+ *                       in the Meseji dashboard before it can be used
+ *                       here — set MESEJI_SENDER_ID once it's live.
+ *   MESEJI_BASE_URL  → Override the API host (defaults to Meseji's
+ *                       production API, https://meseji.co.tz/api/v1).
  */
 const https = require('https');
 const cfg   = require('../config');
+const { normalizeTzMobile } = require('./phone');
 
-/** Normalise TZ number → E.164 (+255XXXXXXXXX) */
-function normalise(num) {
-  const s = String(num).replace(/\s+/g, '').replace(/^0/, '255');
-  return s.startsWith('+') ? s : `+${s}`;
+const MESEJI = {
+  baseUrl:    cfg.meseji.baseUrl || 'https://meseji.co.tz/api/v1',
+  sendPath:   '/sms/send',
+  statsPath:  '/sms/stats', // + '/:batch_id'
+  authHeader: 'x-api-key',  // raw key, no "Bearer" prefix
+};
+
+async function meseji(method, path, apiKey, body) {
+  return new Promise((resolve) => {
+    let url;
+    try {
+      // NOTE: new URL(path, base) treats a path starting with '/' as
+      // absolute and DISCARDS base's own path (e.g. the '/api/v1' in
+      // MESEJI.baseUrl) — so build the full string ourselves instead
+      // of relying on WHATWG relative-URL resolution here.
+      const base = MESEJI.baseUrl.replace(/\/+$/, '');
+      url = new URL(base + path);
+    } catch (e) {
+      resolve({ ok: false, error: `invalid_base_url: ${e.message}` });
+      return;
+    }
+
+    const payload = body ? JSON.stringify(body) : null;
+    const options = {
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method,
+      headers: {
+        'Content-Type':        'application/json',
+        [MESEJI.authHeader]:   apiKey,
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        console.log(`[SMS] Meseji ${method} ${path} → HTTP ${res.statusCode}: ${data.slice(0, 400)}`);
+        let json = null;
+        try { json = data ? JSON.parse(data) : null; } catch { /* non-JSON body */ }
+        resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, statusCode: res.statusCode, json });
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[SMS] Network error:', err.message);
+      resolve({ ok: false, error: err.message });
+    });
+
+    if (payload) req.write(payload);
+    req.end();
+  });
 }
 
+/**
+ * Sends one SMS to one or more Tanzanian mobile numbers in a single
+ * Meseji batch call (per the documented /sms/send contract, which
+ * takes a comma-separated string of recipients, not an array).
+ */
 async function sendSMS(to, message) {
-  const { accountSid, authToken, phoneNumber } = cfg.twilio;
+  const apiKey = cfg.meseji.apiKey;
 
-  if (!accountSid || !authToken || !phoneNumber) {
-    console.warn('[SMS] Twilio credentials not configured — SMS skipped.');
-    console.warn('[SMS] Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER on Render.');
+  if (!apiKey) {
+    console.warn('[SMS] Meseji API key not configured — SMS skipped.');
+    console.warn('[SMS] Set MESEJI_API_KEY on Render (see backend/.env.example).');
     return { success: false, error: 'not_configured' };
   }
 
-  const recipients = (Array.isArray(to) ? to : [to]).map(normalise);
-  const results    = [];
+  const recipients = (Array.isArray(to) ? to : [to])
+    .map(normalizeTzMobile)
+    .filter(Boolean);
 
-  for (const recipient of recipients) {
-    console.log(`[SMS] Sending to ${recipient} via Twilio...`);
-
-    const body = new URLSearchParams({
-      To:   recipient,
-      From: phoneNumber,
-      Body: message,
-    }).toString();
-
-    const result = await new Promise((resolve) => {
-      const options = {
-        hostname: 'api.twilio.com',
-        path:     `/2010-04-01/Accounts/${accountSid}/Messages.json`,
-        method:   'POST',
-        headers:  {
-          'Content-Type':   'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(body),
-          'Authorization':  'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => { data += chunk; });
-        res.on('end', () => {
-          console.log(`[SMS] HTTP ${res.statusCode}: ${data.slice(0, 300)}`);
-          try {
-            const json = JSON.parse(data);
-            if (res.statusCode === 201 && json.sid) {
-              console.log(`[SMS] ✅ Sent! SID=${json.sid} status=${json.status}`);
-              resolve({ success: true, messageId: json.sid });
-            } else {
-              const err = json.message ?? json.code ?? 'unknown';
-              console.error(`[SMS] ❌ Failed: ${err}`);
-
-              // Human-readable hints for common Twilio error codes
-              const hints = {
-                21408: 'Permission to send to this region is not enabled — enable Tanzania in Twilio Console → Messaging → Settings → Geo Permissions',
-                21610: 'Recipient has opted out (unsubscribed)',
-                21211: 'Invalid To phone number — check format (+255XXXXXXXXX)',
-                21214: 'To number is not verified — verify it in Twilio Console (trial accounts only)',
-                20003: 'Authentication error — check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN',
-                21608: 'Twilio trial accounts can only send to verified numbers — verify +255611380091 in Twilio Console',
-              };
-              const code = json.code;
-              if (hints[code]) console.warn(`[SMS] Hint (${code}): ${hints[code]}`);
-
-              resolve({ success: false, error: err, code });
-            }
-          } catch {
-            resolve({ success: false, error: 'parse_error' });
-          }
-        });
-      });
-
-      req.on('error', (err) => {
-        console.error('[SMS] Network error:', err.message);
-        resolve({ success: false, error: err.message });
-      });
-
-      req.write(body);
-      req.end();
-    });
-
-    results.push(result);
+  if (recipients.length === 0) {
+    console.warn(`[SMS] No valid Tanzanian mobile number(s) in: ${JSON.stringify(to)}`);
+    return { success: false, error: 'invalid_recipient' };
   }
 
-  // Return first result (usually single recipient)
-  return results[0] ?? { success: false, error: 'no_recipients' };
+  console.log(`[SMS] Sending to ${recipients.join(', ')} via Meseji (sender: ${cfg.meseji.senderId})...`);
+
+  const result = await meseji('POST', MESEJI.sendPath, apiKey, {
+    sender_id: cfg.meseji.senderId,
+    message,
+    contacts: recipients.join(', '),
+  });
+
+  if (result.ok && result.json?.batch_id) {
+    console.log(`[SMS] ✅ Queued (batch_id=${result.json.batch_id}, status=${result.json.status})`);
+    return {
+      success: true,
+      batchId: result.json.batch_id,
+      status: result.json.status,
+      estimatedCost: result.json.estimated_cost,
+    };
+  }
+
+  const err = result.json?.message ?? result.json?.error ?? result.error ?? 'unknown_error';
+  console.error(`[SMS] ❌ Send failed: HTTP ${result.statusCode ?? '—'} — ${err}`);
+  return { success: false, error: err, httpStatus: result.statusCode };
 }
 
-module.exports = { sendSMS };
+/**
+ * Optional: check delivery status/success rate for a previously sent
+ * batch (GET /sms/stats/:batch_id). Handy for debugging from a shell
+ * or an admin tool — not called automatically anywhere yet.
+ */
+async function getBatchStats(batchId) {
+  const apiKey = cfg.meseji.apiKey;
+  if (!apiKey) return { success: false, error: 'not_configured' };
+
+  const result = await meseji('GET', `${MESEJI.statsPath}/${encodeURIComponent(batchId)}`, apiKey);
+  if (result.ok && result.json) {
+    return { success: true, ...result.json };
+  }
+  return { success: false, error: result.json?.message ?? result.error ?? 'unknown_error' };
+}
+
+module.exports = { sendSMS, getBatchStats };

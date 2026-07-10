@@ -90,15 +90,17 @@ const cfg = {
   // ── Redis ─────────────────────────────────────────────
   redisUrl: process.env.REDIS_URL || null,
 
-  // ── Africa's Talking ──────────────────────────────────
-  africasTalking: {
-    username: process.env.AT_USERNAME || 'sandbox',
 
-    apiKey: process.env.AT_API_KEY || '',
+  // ── Meseji SMS (https://meseji.co.tz/docs) ─────────────
+  meseji: {
+    apiKey: process.env.MESEJI_API_KEY || '',
 
-    senderId: process.env.AT_SENDER_ID || 'ParkiPay',
+    // 'MESEJI' is the pre-approved default sender every account gets.
+    // Switch to 'ParkiPay' once that sender ID is requested + approved
+    // (POST /sms/request-sender-id in the Meseji dashboard/API).
+    senderId: process.env.MESEJI_SENDER_ID || 'MESEJI',
 
-    sandbox: process.env.AT_SANDBOX === 'True',
+    baseUrl: process.env.MESEJI_BASE_URL || 'https://meseji.co.tz/api/v1',
   },
 
   // ── Resend Email ──────────────────────────────────────
@@ -119,7 +121,7 @@ if (cfg.isProduction) {
   required('SECRET_KEY');
   required('DATABASE_URL');
   required('CORS_ALLOWED_ORIGINS');
-  required('AT_API_KEY');
+  required('MESEJI_API_KEY');
   required('RESEND_API_KEY');
 }
 
