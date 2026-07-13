@@ -53,11 +53,11 @@ function buildBillSms({
   return (
     `ParkiPay: Bili ya maegesho - ${locationName}\n` +
     `Gari: ${plateNumber}\n` +
-    `Namba ya Udhibiti: ${controlNumber}\n` +
+    `Namba ya Malipo: ${controlNumber}\n` +
     `Kiasi cha Kulipa: ${amountFmt}\n` +
     `Muda wa Kutolewa: ${fmtDarEsSalaam(new Date(generatedAt))}\n` +
     `Inaisha: ${fmtDarEsSalaam(new Date(expiresAt))}\n` +
-    `Lipa kupitia namba ya udhibiti hapo juu kabla ya muda kuisha. Asante kwa kutumia ParkiPay.`
+    `Lipa kupitia namba ya malipo hapo juu kabla ya muda kuisha. Asante kwa kutumia ParkiPay.`
   );
 }
 
