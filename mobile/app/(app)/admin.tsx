@@ -46,6 +46,76 @@ function isThreeNames(raw: string): boolean {
 const { width: W } = Dimensions.get('window');
 const SIDEBAR_W    = W * 0.75;
 
+// ── Location dropdown (DB-driven, scrolls instead of wrapping into an
+//    ever-growing grid of chips as more locations are added) ──────────────
+function LocationSelect({
+  locations, value, onSelect, placeholder, C, S,
+}: {
+  locations: Location[];
+  value: number | null;
+  onSelect: (id: number) => void;
+  placeholder: string;
+  C: any;
+  S: any;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = locations.find(l => l.id === value);
+
+  return (
+    <>
+      <TouchableOpacity
+        style={[S.input, S.selectField, { borderColor: C.border, backgroundColor: C.bg }]}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[S.selectFieldText, { color: selected ? C.text : C.textMuted }]}
+          numberOfLines={1}
+        >
+          {selected ? selected.name : placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={C.textSub} />
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={S.selectModalCenter}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+          <View style={[S.selectDropdown, { backgroundColor: C.card }]}>
+            <Text style={[S.selectDropdownTitle, { color: C.text }]}>{placeholder}</Text>
+            <ScrollView
+              style={S.selectDropdownScroll}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {locations.map(loc => (
+                <TouchableOpacity
+                  key={loc.id}
+                  style={[S.selectOption, loc.id === value && S.selectOptionActive]}
+                  onPress={() => { onSelect(loc.id); setOpen(false); }}
+                >
+                  <Text
+                    style={[
+                      S.selectOptionText,
+                      { color: C.text },
+                      loc.id === value && S.selectOptionTextActive,
+                    ]}
+                  >
+                    {loc.name}
+                  </Text>
+                  {loc.id === value && (
+                    <Ionicons name="checkmark" size={18} color={SprintColors.green} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export default function AdminScreen() {
   const { clearAuth, refreshToken } = useAuthStore();
   const { language, theme, setLanguage, setTheme } = useSettingsStore();
@@ -430,17 +500,14 @@ export default function AdminScreen() {
           />
 
           <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('selectLocation')}</Text>
-          <View style={S.locGrid}>
-            {locations.map(loc => (
-              <TouchableOpacity key={loc.id}
-                style={[S.locChip, newLocId === loc.id && S.locChipActive]}
-                onPress={() => setNewLocId(loc.id)}>
-                <Text style={[S.locChipText, newLocId === loc.id && { color:'#fff' }]}>
-                  {loc.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <LocationSelect
+            locations={locations}
+            value={newLocId}
+            onSelect={setNewLocId}
+            placeholder={tr('selectLocation')}
+            C={C}
+            S={S}
+          />
 
           <TouchableOpacity style={[S.saveBtn, saving && { opacity:0.6 }]}
             onPress={handleAdd} disabled={saving}>
@@ -460,13 +527,15 @@ export default function AdminScreen() {
           <Text style={[S.sheetTitle, { color: C.text }]}>
             {tr('moveLocation')}: {showMove?.fullName}
           </Text>
-          <View style={S.locGrid}>
-            {locations.map(loc => (
-              <TouchableOpacity key={loc.id} style={S.locChip} onPress={() => handleMove(loc.id)}>
-                <Text style={S.locChipText}>{loc.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Text style={[S.inputLabel, { color: C.textSub }]}>{tr('selectLocation')}</Text>
+          <LocationSelect
+            locations={locations}
+            value={null}
+            onSelect={handleMove}
+            placeholder={tr('selectLocation')}
+            C={C}
+            S={S}
+          />
           </ScrollView>
         </View>
       </Modal>
@@ -560,12 +629,21 @@ const styles = StyleSheet.create({
   input:{ height: moderateScale(48), borderWidth:1.5, borderRadius:10, paddingHorizontal:14,
     fontSize: moderateScale(15), marginBottom:14 },
   inputHintSmall:{ fontSize: moderateScale(11), marginTop:-8, marginBottom:14 },
-  locGrid:{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:20 },
-  locChip:{ paddingHorizontal:12, paddingVertical:7, borderRadius:20,
-    backgroundColor:'rgba(30,181,58,0.08)', borderWidth:1.5,
-    borderColor: SprintColors.green },
-  locChipActive:{ backgroundColor: SprintColors.green },
-  locChipText:{ fontSize: moderateScale(12), fontWeight:'600', color: SprintColors.green },
+  // Location dropdown select
+  selectField:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between' },
+  selectFieldText:{ fontSize: moderateScale(15), flex:1, marginRight:8 },
+  selectModalCenter:{ flex:1, backgroundColor:'rgba(0,0,0,0.5)',
+    alignItems:'center', justifyContent:'center', padding:24 },
+  selectDropdown:{ width:'100%', maxWidth:420, maxHeight:'70%', borderRadius:16, padding:16,
+    shadowColor:'#000', shadowOffset:{width:0,height:8}, shadowOpacity:0.2,
+    shadowRadius:20, elevation:12 },
+  selectDropdownTitle:{ fontSize: moderateScale(15), fontWeight:'800', marginBottom:10 },
+  selectDropdownScroll:{ maxHeight:320 },
+  selectOption:{ flexDirection:'row', alignItems:'center', justifyContent:'space-between',
+    paddingVertical:12, paddingHorizontal:10, borderRadius:10 },
+  selectOptionActive:{ backgroundColor:'rgba(30,181,58,0.08)' },
+  selectOptionText:{ fontSize: moderateScale(14), fontWeight:'600' },
+  selectOptionTextActive:{ color: SprintColors.green, fontWeight:'800' },
   saveBtn:{ height:52, backgroundColor: SprintColors.green, borderRadius:12,
     alignItems:'center', justifyContent:'center' },
   saveBtnText:{ color:'#fff', fontSize: moderateScale(15), fontWeight:'800' },
