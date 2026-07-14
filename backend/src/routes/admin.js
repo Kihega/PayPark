@@ -17,7 +17,6 @@ const { Router } = require('express');
 const { z }      = require('zod');
 const prisma     = require('../lib/prisma');
 const redis      = require('../lib/redis');
-const { sendSMS } = require('../lib/sms');
 const { isValidTzMobile, normalizeTzMobile } = require('../lib/phone');
 const { authenticate } = require('../middleware/auth');
 
@@ -197,16 +196,12 @@ router.post('/vehicles/', async (req, res, next) => {
     // Invalidate any cached lookup for this plate
     await redis.cacheDel(`vehicle:${plateNumber}`);
 
-    // Send SMS to owner with registration confirmation
-    const smsText =
-      `ParkiPay: Gari lako (${plateNumber}) limesajiliwa kwenye mfumo wa maegesho. ` +
-      `Utapokea SMS yenye maelezo kamili ya bili kila utakapotozwa maegesho. Asante!`;
-    const smsResult = await sendSMS(ownerPhone, smsText);
-    if (!smsResult.success) {
-      console.warn('[Admin] Vehicle registered but SMS failed:', smsResult.error);
-    }
-
-    res.status(201).json({ ...vehicle, smsSent: smsResult.success });
+    // No SMS here by design — ParkiPay sends exactly one SMS per bill
+    // (see backend/src/routes/billing.js), not a separate registration
+    // confirmation. Keeping it to a single message avoids the owner
+    // getting two texts, and removes the silent-failure gap where a
+    // failed registration SMS previously went unnoticed by the officer.
+    res.status(201).json(vehicle);
   } catch (err) { next(err); }
 });
 
