@@ -1,7 +1,7 @@
 /**
  * ParkiPay — Vehicle Registry Screen (Admin/Supervisor only)
  *
- * Lists all registered vehicles, allows adding new ones (with SMS to owner)
+ * Lists all registered vehicles, allows adding new ones
  * and removing existing ones.
  */
 import { useState, useEffect, useCallback } from 'react';
