@@ -1,11 +1,13 @@
 # =============================================================================
 # ParkiPay — Backend CI
 #
-# Runs on every push / PR that touches backend/** on the develop branch.
-# Pipeline:  lint  →  security-audit  →  test  →  merge-to-main
+# Runs on every push / PR that touches backend/** on develop, and on any
+# PR targeting main (so a manually-opened develop -> main PR shows these
+# same checks before you merge it yourself).
+# Pipeline:  lint  →  security-audit  →  test
 #
-# Required secrets  (Settings → Secrets → Actions):
-#   GH_PAT   Personal Access Token — scopes: repo, workflow
+# No job in this workflow touches `main` — PRs into main are opened and
+# merged manually once all checks are green.
 # =============================================================================
 
 name: Backend CI
@@ -133,44 +135,3 @@ jobs:
           name: backend-coverage
           path: backend/coverage/
           retention-days: 14
-
-  # ── Promote develop → main via PR + auto-merge (ruleset-compliant) ───────
-  promote-to-main:
-    name: Promote develop → main (PR + auto-merge)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    needs: [lint, security-audit, test]
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Open (or reuse) develop → main PR and enable auto-merge
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
-
-          if [ -z "$number" ]; then
-            if gh pr create \
-              --base main --head develop \
-              --title "chore: promote develop → main" \
-              --body "Automated promotion — backend CI passed on develop @ ${{ github.sha }}."
-            then
-              number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
-            else
-              echo "gh pr create failed (likely a race with mobile-ci's promote job) — re-checking..."
-              number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
-            fi
-          fi
-
-          if [ -z "$number" ]; then
-            echo "::error::Could not find or create a develop → main PR"
-            exit 1
-          fi
-
-          echo "Using PR #$number"
-          gh pr merge "$number" --auto --merge
