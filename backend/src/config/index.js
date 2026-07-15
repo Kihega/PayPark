@@ -95,10 +95,10 @@ const cfg = {
   meseji: {
     apiKey: process.env.MESEJI_API_KEY || '',
 
-    // 'MESEJI' is the pre-approved default sender every account gets.
-    // Switch to 'ParkiPay' once that sender ID is requested + approved
-    // (POST /sms/request-sender-id in the Meseji dashboard/API).
-    senderId: process.env.MESEJI_SENDER_ID || 'MESEJI',
+    // 'PARKIPAY' was requested via POST /sms/request-sender-id and has
+    // since been approved in the Meseji dashboard — safe to use as the
+    // default. Still overridable via MESEJI_SENDER_ID if that ever changes.
+    senderId: process.env.MESEJI_SENDER_ID || 'PARKIPAY',
 
     baseUrl: process.env.MESEJI_BASE_URL || 'https://meseji.co.tz/api/v1',
   },

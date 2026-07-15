@@ -1,48 +1,68 @@
 #!/usr/bin/env python3
 """
-ParkiPay — patch: drop the registration SMS, keep only the bill SMS
-======================================================================
-Vehicle registration used to send its own SMS ("Gari lako
-limesajiliwa...") in addition to the bill SMS sent later when a bill
-is generated — two messages per vehicle lifecycle, and the
-registration one had a silent-failure problem (see below). This patch
-removes it entirely: registration just creates the record now, and
-the bill SMS (already sent from billing.js, with the full amount /
-control number / expiry) becomes the only SMS ParkiPay ever sends.
+ParkiPay — patch: approved sender ID + remove CI auto-merge
+===============================================================
+Covers 4 requested fixes; #2 and #3 needed verification, not code
+changes (see notes below).
 
-WHY THE REGISTRATION SMS WASN'T RELIABLY REACHING OWNERS
-------------------------------------------------------------
-admin.js awaited sendSMS() and returned `smsSent: true/false` in the
-API response — but nothing in the mobile app (vehicles.tsx) ever read
-that field. So if a send failed, the officer still saw "Vehicle
-registered" with no indication the SMS didn't go out. Different
-officers entering phone numbers in different formats (with/without
-+255, spaces, leading 0) made this worse before number normalization
-existed. Removing this SMS removes the whole failure class — the
-only SMS ParkiPay sends now is the bill SMS, using the same
-validated/normalized number, with visible server-side logging
-(`[SMS] Meseji POST /sms/send -> HTTP ...`) if it ever fails.
+Fix 1 — use the approved 'PARKIPAY' sender ID
+------------------------------------------------
+Your Meseji sender ID request for "PARKIPAY" has been approved. This
+switches the default in backend/src/config/index.js and
+backend/.env.example from the fallback 'MESEJI' sender to 'PARKIPAY'.
+(You can still override with the MESEJI_SENDER_ID env var on Render —
+this just changes what happens when that var is unset.)
 
-WHAT THIS PATCH DOES
-----------------------
-1. backend/src/routes/admin.js — removes the SMS send from vehicle
-   registration (`POST /api/admin/vehicles/`). The endpoint still
-   validates + normalizes + stores ownerPhone exactly as before; it
-   just no longer texts the owner at this step. Drops the now-unused
-   `sendSMS` import so ESLint's no-unused-vars doesn't flag it in CI.
-2. mobile/app/(app)/vehicles.tsx — updates a stale doc comment that
-   referenced "with SMS to owner" on the registration screen (no
-   functional UI change was needed — the mobile app never displayed
-   anything about the registration SMS in the first place).
+Fix 2 — only one SMS per bill (already true, verified not changed)
+----------------------------------------------------------------------
+Checked: `sendSMS(` has exactly one call site in the whole backend —
+backend/src/routes/billing.js. The registration-time SMS was already
+removed in an earlier patch. This script re-asserts that invariant
+and fails loudly if it's ever violated again, but makes no file
+changes for this item since it's already correct.
+
+Fix 3 — end-to-end connectivity audit (verified, no changes needed)
+-------------------------------------------------------------------
+Traced the full chain and confirmed every hop lines up:
+  mobile lookup.tsx
+    -> billingService.generate(plate, locationId)          [services/api.ts]
+    -> POST {API_BASE_URL}/api/billing/generate/            [constants/api.ts]
+  backend app.js: app.use('/api/billing/', billing route)
+  billing.js: router.post('/generate/', ...)
+    body validated against { plate_number, location_id }    (matches mobile's payload)
+    -> buildBillSms() -> sendSMS() -> lib/sms.js
+    -> POST https://meseji.co.tz/api/v1/sms/send
+       header: x-api-key: <MESEJI_API_KEY>
+       body:   { sender_id, message, contacts: "255XXXXXXXXX" }
+No mismatches found (route paths, field names, and the Meseji
+request shape all check out). sendSMS() is intentionally
+fire-and-forget from billing.js (`.catch()`, not awaited) so bill
+generation doesn't wait on SMS latency — that's by design, not a bug.
+No code change was needed for this item.
+
+Fix 4 — remove CI auto-merge, go back to manual PR + manual merge
+----------------------------------------------------------------------
+Removes the `promote-to-main` job entirely from both
+.github/workflows/backend-ci.yml and mobile-ci.yml. CI now stops
+after lint/security-audit/test (backend) or lint/type-check/test
+(mobile) — nothing touches `main` automatically anymore. The
+`pull_request: branches: [develop, main]` trigger added earlier is
+KEPT on purpose: it means when you manually open a develop -> main PR
+in the browser, the same checks run again on that PR itself, so
+you'll see green checks right there before you click merge yourself.
+Also removes the now-unused GH_PAT requirement noted in each
+workflow's header comment, since nothing in these files calls `gh`
+anymore.
 
 USAGE
 -----
-Run from the repository root (the folder containing `backend/` and
-`mobile/`):
+Run from the repository root (the folder containing `backend/`,
+`mobile/`, and `.github/`):
 
-    python3 patch_remove_registration_sms.py
+    python3 patch_sender_id_and_manual_merge.py
 """
 import os
+import re
 import subprocess
 
 ROOT = os.getcwd()
@@ -92,102 +112,333 @@ def check_repo():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STEP 1 — admin.js: drop the registration SMS
+# STEP 1 — approved 'PARKIPAY' sender ID
 # ═══════════════════════════════════════════════════════════════════════════
-ADMIN_OLD_IMPORTS = """const { sendSMS } = require('../lib/sms');
-const { isValidTzMobile, normalizeTzMobile } = require('../lib/phone');
-const { authenticate } = require('../middleware/auth');"""
+CONFIG_OLD = """    // 'MESEJI' is the pre-approved default sender every account gets.
+    // Switch to 'ParkiPay' once that sender ID is requested + approved
+    // (POST /sms/request-sender-id in the Meseji dashboard/API).
+    senderId: process.env.MESEJI_SENDER_ID || 'MESEJI',"""
 
-ADMIN_NEW_IMPORTS = """const { isValidTzMobile, normalizeTzMobile } = require('../lib/phone');
-const { authenticate } = require('../middleware/auth');"""
+CONFIG_NEW = """    // 'PARKIPAY' was requested via POST /sms/request-sender-id and has
+    // since been approved in the Meseji dashboard — safe to use as the
+    // default. Still overridable via MESEJI_SENDER_ID if that ever changes.
+    senderId: process.env.MESEJI_SENDER_ID || 'PARKIPAY',"""
 
-ADMIN_OLD_HANDLER_TAIL = """    // Invalidate any cached lookup for this plate
-    await redis.cacheDel(`vehicle:${plateNumber}`);
+ENV_OLD = """# 'MESEJI' is the pre-approved default sender ID. Switch to 'ParkiPay' once
+# that custom sender ID has been requested + approved in the dashboard.
+MESEJI_SENDER_ID=MESEJI"""
 
-    // Send SMS to owner with registration confirmation
-    const smsText =
-      `ParkiPay: Gari lako (${plateNumber}) limesajiliwa kwenye mfumo wa maegesho. ` +
-      `Utapokea SMS yenye maelezo kamili ya bili kila utakapotozwa maegesho. Asante!`;
-    const smsResult = await sendSMS(ownerPhone, smsText);
-    if (!smsResult.success) {
-      console.warn('[Admin] Vehicle registered but SMS failed:', smsResult.error);
-    }
+ENV_NEW = """# 'PARKIPAY' is the approved sender ID for this account (approved via
+# the Meseji dashboard's sender-ID request flow).
+MESEJI_SENDER_ID=PARKIPAY"""
 
-    res.status(201).json({ ...vehicle, smsSent: smsResult.success });"""
+SMS_JS_OLD = """ * Optional env vars:
+ *   MESEJI_SENDER_ID → Sender name shown on the recipient's phone.
+ *                       Defaults to 'MESEJI', the pre-approved
+ *                       default sender every account gets. A custom
+ *                       sender ID (e.g. 'ParkiPay') must be requested
+ *                       via POST /sms/request-sender-id and approved
+ *                       in the Meseji dashboard before it can be used
+ *                       here — set MESEJI_SENDER_ID once it's live."""
 
-ADMIN_NEW_HANDLER_TAIL = """    // Invalidate any cached lookup for this plate
-    await redis.cacheDel(`vehicle:${plateNumber}`);
-
-    // No SMS here by design — ParkiPay sends exactly one SMS per bill
-    // (see backend/src/routes/billing.js), not a separate registration
-    // confirmation. Keeping it to a single message avoids the owner
-    // getting two texts, and removes the silent-failure gap where a
-    // failed registration SMS previously went unnoticed by the officer.
-    res.status(201).json(vehicle);"""
+SMS_JS_NEW = """ * Optional env vars:
+ *   MESEJI_SENDER_ID → Sender name shown on the recipient's phone.
+ *                       Defaults to 'PARKIPAY', this account's
+ *                       approved sender ID. Override with
+ *                       MESEJI_SENDER_ID if you ever need to send
+ *                       under a different (also-approved) sender."""
 
 
-def step_01_admin_js():
-    print("\n[1/2] backend/src/routes/admin.js — drop registration SMS")
-    p = path("backend/src/routes/admin.js")
+def step_01_sender_id():
+    print("\n[1/4] Use approved 'PARKIPAY' sender ID as the default")
+
+    p = path("backend/src/config/index.js")
     text = read(p)
+    if "'PARKIPAY'" in text:
+        print(f"  {p} already patched — skipping")
+    else:
+        require_in(text, CONFIG_OLD, "backend/src/config/index.js")
+        text = text.replace(CONFIG_OLD, CONFIG_NEW)
+        write(p, text)
+        print(f"  patched {p}")
 
-    if "sendSMS" not in text:
-        print("  (already patched — skipping)")
-        return
+    p = path("backend/.env.example")
+    text = read(p)
+    if "MESEJI_SENDER_ID=PARKIPAY" in text:
+        print(f"  {p} already patched — skipping")
+    else:
+        require_in(text, ENV_OLD, "backend/.env.example")
+        text = text.replace(ENV_OLD, ENV_NEW)
+        write(p, text)
+        print(f"  patched {p}")
 
-    require_in(text, ADMIN_OLD_IMPORTS, "admin.js (imports)")
-    text = text.replace(ADMIN_OLD_IMPORTS, ADMIN_NEW_IMPORTS)
+    p = path("backend/src/lib/sms.js")
+    text = read(p)
+    if "approved sender ID" in text:
+        print(f"  {p} already patched — skipping")
+    else:
+        require_in(text, SMS_JS_OLD, "backend/src/lib/sms.js")
+        text = text.replace(SMS_JS_OLD, SMS_JS_NEW)
+        write(p, text)
+        print(f"  patched {p}")
 
-    require_in(text, ADMIN_OLD_HANDLER_TAIL, "admin.js (registration handler tail)")
-    text = text.replace(ADMIN_OLD_HANDLER_TAIL, ADMIN_NEW_HANDLER_TAIL)
+    git_commit("backend: switch default Meseji sender ID to the approved 'PARKIPAY'")
 
-    assert "sendSMS" not in text, "sendSMS should be fully removed from admin.js"
-    assert "smsSent" not in text
-    write(p, text)
-    print(f"  patched {p}")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STEP 2 — verify exactly one sendSMS call site (no file changes)
+# ═══════════════════════════════════════════════════════════════════════════
+def step_02_verify_single_sms():
+    print("\n[2/4] Verify only one sendSMS(...) call site exists (bill SMS only)")
+    call_sites = []
+    for dirpath, _, filenames in os.walk(path("backend/src")):
+        for fn in filenames:
+            if not fn.endswith(".js"):
+                continue
+            fp = os.path.join(dirpath, fn)
+            text = read(fp)
+            for i, line in enumerate(text.splitlines(), 1):
+                if re.search(r"\bsendSMS\s*\(", line) and "async function sendSMS" not in line:
+                    call_sites.append(f"{os.path.relpath(fp, ROOT)}:{i}")
+
+    print(f"  sendSMS() call sites found: {call_sites}")
+    if len(call_sites) != 1 or "billing.js" not in call_sites[0]:
+        raise SystemExit(
+            "\n✗ Expected exactly one sendSMS() call site, in billing.js. "
+            f"Found: {call_sites}\n"
+            "  Something re-introduced a second SMS send (e.g. a registration "
+            "SMS) — please investigate before proceeding."
+        )
+    print("  ✓ Confirmed: exactly one SMS send site (billing.js) — no changes needed.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STEP 3 — connectivity audit (no file changes, informational only)
+# ═══════════════════════════════════════════════════════════════════════════
+def step_03_connectivity_audit():
+    print("\n[3/4] End-to-end connectivity audit (mobile <-> backend <-> Meseji)")
+    checks = [
+        ("mobile/services/api.ts", "/api/billing/generate/"),
+        ("backend/src/app.js", "/api/billing/"),
+        ("backend/src/routes/billing.js", "router.post('/generate/'"),
+        ("backend/src/routes/billing.js", "plate_number"),
+        ("backend/src/routes/billing.js", "location_id"),
+        ("backend/src/lib/sms.js", "x-api-key"),
+        ("backend/src/lib/sms.js", "/sms/send"),
+    ]
+    ok = True
+    for rel, needle in checks:
+        p = path(rel)
+        if not os.path.exists(p):
+            print(f"  ✗ missing file: {rel}")
+            ok = False
+            continue
+        text = read(p)
+        status = "✓" if needle in text else "✗"
+        if needle not in text:
+            ok = False
+        print(f"  {status} {rel} contains {needle!r}")
+
+    if not ok:
+        raise SystemExit(
+            "\n✗ Connectivity audit found a mismatch — see ✗ lines above. "
+            "Not safe to assume mobile <-> backend <-> Meseji wiring is intact; "
+            "please investigate before deploying."
+        )
+    print("  ✓ mobile -> backend -> Meseji wiring verified consistent. No changes needed.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STEP 4 — remove CI auto-merge; manual PR + manual merge only
+# ═══════════════════════════════════════════════════════════════════════════
+BACKEND_OLD_HEADER = """# =============================================================================
+# ParkiPay — Backend CI
+#
+# Runs on every push / PR that touches backend/** on the develop branch.
+# Pipeline:  lint  →  security-audit  →  test  →  merge-to-main
+#
+# Required secrets  (Settings → Secrets → Actions):
+#   GH_PAT   Personal Access Token — scopes: repo, workflow
+# ============================================================================="""
+
+BACKEND_NEW_HEADER = """# =============================================================================
+# ParkiPay — Backend CI
+#
+# Runs on every push / PR that touches backend/** on develop, and on any
+# PR targeting main (so a manually-opened develop -> main PR shows these
+# same checks before you merge it yourself).
+# Pipeline:  lint  →  security-audit  →  test
+#
+# No job in this workflow touches `main` — PRs into main are opened and
+# merged manually once all checks are green.
+# ============================================================================="""
+
+BACKEND_OLD_MERGE_JOB = """
+  # ── Promote develop → main via PR + auto-merge (ruleset-compliant) ───────
+  promote-to-main:
+    name: Promote develop → main (PR + auto-merge)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [lint, security-audit, test]
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Open (or reuse) develop → main PR and enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+
+          if [ -z "$number" ]; then
+            if gh pr create \\
+              --base main --head develop \\
+              --title "chore: promote develop → main" \\
+              --body "Automated promotion — backend CI passed on develop @ ${{ github.sha }}."
+            then
+              number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+            else
+              echo "gh pr create failed (likely a race with mobile-ci's promote job) — re-checking..."
+              number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+            fi
+          fi
+
+          if [ -z "$number" ]; then
+            echo "::error::Could not find or create a develop → main PR"
+            exit 1
+          fi
+
+          echo "Using PR #$number"
+          gh pr merge "$number" --auto --merge
+"""
+
+MOBILE_OLD_HEADER = """# =============================================================================
+# ParkiPay — Mobile CI
+#
+# Runs on every push / PR that touches mobile/** on the develop branch.
+# Pipeline:  lint  →  type-check  →  test  →  merge-to-main
+#
+# Required secrets  (Settings → Secrets → Actions):
+#   GH_PAT   Personal Access Token — scopes: repo, workflow
+# ============================================================================="""
+
+MOBILE_NEW_HEADER = """# =============================================================================
+# ParkiPay — Mobile CI
+#
+# Runs on every push / PR that touches mobile/** on develop, and on any
+# PR targeting main (so a manually-opened develop -> main PR shows these
+# same checks before you merge it yourself).
+# Pipeline:  lint  →  type-check  →  test
+#
+# No job in this workflow touches `main` — PRs into main are opened and
+# merged manually once all checks are green.
+# ============================================================================="""
+
+MOBILE_OLD_MERGE_JOB = """
+  # ── Promote develop → main via PR + auto-merge (ruleset-compliant) ───────
+  promote-to-main:
+    name: Promote develop → main (PR + auto-merge)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [lint, type-check, test]
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Open (or reuse) develop → main PR and enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+
+          if [ -z "$number" ]; then
+            if gh pr create \\
+              --base main --head develop \\
+              --title "chore: promote develop → main" \\
+              --body "Automated promotion — mobile CI passed on develop @ ${{ github.sha }}."
+            then
+              number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+            else
+              echo "gh pr create failed (likely a race with backend-ci's promote job) — re-checking..."
+              number=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+            fi
+          fi
+
+          if [ -z "$number" ]; then
+            echo "::error::Could not find or create a develop → main PR"
+            exit 1
+          fi
+
+          echo "Using PR #$number"
+          gh pr merge "$number" --auto --merge
+"""
+
+
+def step_04_remove_ci_automerge():
+    print("\n[4/4] Remove CI auto-merge job — manual PR + manual merge only")
+
+    p = path(".github/workflows/backend-ci.yml")
+    text = read(p)
+    if "promote-to-main" not in text:
+        print(f"  {p} already has no promote-to-main job — skipping")
+    else:
+        require_in(text, BACKEND_OLD_HEADER, "backend-ci.yml (header)")
+        text = text.replace(BACKEND_OLD_HEADER, BACKEND_NEW_HEADER)
+        require_in(text, BACKEND_OLD_MERGE_JOB, "backend-ci.yml (promote-to-main job)")
+        text = text.replace(BACKEND_OLD_MERGE_JOB, "")
+        text = text.rstrip("\n") + "\n"
+        assert "promote-to-main" not in text
+        assert "gh pr" not in text
+        write(p, text)
+        print(f"  patched {p}")
+
+    p = path(".github/workflows/mobile-ci.yml")
+    text = read(p)
+    if "promote-to-main" not in text:
+        print(f"  {p} already has no promote-to-main job — skipping")
+    else:
+        require_in(text, MOBILE_OLD_HEADER, "mobile-ci.yml (header)")
+        text = text.replace(MOBILE_OLD_HEADER, MOBILE_NEW_HEADER)
+        require_in(text, MOBILE_OLD_MERGE_JOB, "mobile-ci.yml (promote-to-main job)")
+        text = text.replace(MOBILE_OLD_MERGE_JOB, "")
+        text = text.rstrip("\n") + "\n"
+        assert "promote-to-main" not in text
+        assert "gh pr" not in text
+        write(p, text)
+        print(f"  patched {p}")
+
     git_commit(
-        "backend(admin): stop sending a registration SMS — the bill SMS is now the "
-        "only message ParkiPay sends per vehicle"
+        "ci: remove auto-merge job — develop->main PRs are now opened and "
+        "merged manually once checks are green"
     )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# STEP 2 — vehicles.tsx: stale doc-comment cleanup
-# ═══════════════════════════════════════════════════════════════════════════
-VEHICLES_OLD_COMMENT = " * Lists all registered vehicles, allows adding new ones (with SMS to owner)"
-VEHICLES_NEW_COMMENT = " * Lists all registered vehicles, allows adding new ones"
-
-
-def step_02_vehicles_tsx():
-    print("\n[2/2] mobile/app/(app)/vehicles.tsx — update stale doc comment")
-    p = path("mobile/app/(app)/vehicles.tsx")
-    text = read(p)
-
-    if VEHICLES_OLD_COMMENT not in text:
-        print("  (already patched or comment not found — skipping)")
-        return
-
-    text = text.replace(VEHICLES_OLD_COMMENT, VEHICLES_NEW_COMMENT)
-    write(p, text)
-    print(f"  patched {p}")
-    git_commit("mobile(vehicles): update doc comment — registration no longer sends an SMS")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 def main():
     check_repo()
-    print("ParkiPay patch — remove registration SMS (bill SMS only)")
+    print("ParkiPay patch — approved sender ID + remove CI auto-merge")
     print("=" * 60)
 
-    step_01_admin_js()
-    step_02_vehicles_tsx()
+    step_01_sender_id()
+    step_02_verify_single_sms()
+    step_03_connectivity_audit()
+    step_04_remove_ci_automerge()
 
     print("\n" + "=" * 60)
     print("✓ Done. Review with `git log --oneline` / `git show`.")
     print("  Push to a feature branch and open a PR (main is still protected).")
-    print("\n  Net effect: ParkiPay now sends exactly one SMS per vehicle —")
-    print("  the full bill SMS from billing.js — instead of a registration")
-    print("  text plus a separate bill text.")
+    print("\n  Reminder: also set MESEJI_SENDER_ID=PARKIPAY on Render's env vars")
+    print("  (this patch only changes the code-level default/fallback).")
+    print("  GH_PAT is no longer required by these workflows — you can remove")
+    print("  that secret if nothing else in the repo still uses it.")
 
 
 if __name__ == "__main__":
