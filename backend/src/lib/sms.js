@@ -6,12 +6,10 @@
  *                       with 'zs_'); sent as the `x-api-key` header.
  * Optional env vars:
  *   MESEJI_SENDER_ID → Sender name shown on the recipient's phone.
- *                       Defaults to 'MESEJI', the pre-approved
- *                       default sender every account gets. A custom
- *                       sender ID (e.g. 'ParkiPay') must be requested
- *                       via POST /sms/request-sender-id and approved
- *                       in the Meseji dashboard before it can be used
- *                       here — set MESEJI_SENDER_ID once it's live.
+ *                       Defaults to 'PARKIPAY', this account's
+ *                       approved sender ID. Override with
+ *                       MESEJI_SENDER_ID if you ever need to send
+ *                       under a different (also-approved) sender.
  *   MESEJI_BASE_URL  → Override the API host (defaults to Meseji's
  *                       production API, https://meseji.co.tz/api/v1).
  */

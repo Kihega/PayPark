@@ -1,46 +1,54 @@
 #!/usr/bin/env python3
 """
-ParkiPay — patch: drop the registration SMS, keep only the bill SMS
-======================================================================
-Vehicle registration used to send its own SMS ("Gari lako
-limesajiliwa...") in addition to the bill SMS sent later when a bill
-is generated — two messages per vehicle lifecycle, and the
-registration one had a silent-failure problem (see below). This patch
-removes it entirely: registration just creates the record now, and
-the bill SMS (already sent from billing.js, with the full amount /
-control number / expiry) becomes the only SMS ParkiPay ever sends.
+ParkiPay — patch: fix missing DIRECT_URL (Prisma P1012 in CI)
+=================================================================
+WHAT WAS BROKEN
+----------------
+backend/prisma/schema.prisma requires BOTH:
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
 
-WHY THE REGISTRATION SMS WASN'T RELIABLY REACHING OWNERS
-------------------------------------------------------------
-admin.js awaited sendSMS() and returned `smsSent: true/false` in the
-API response — but nothing in the mobile app (vehicles.tsx) ever read
-that field. So if a send failed, the officer still saw "Vehicle
-registered" with no indication the SMS didn't go out. Different
-officers entering phone numbers in different formats (with/without
-+255, spaces, leading 0) made this worse before number normalization
-existed. Removing this SMS removes the whole failure class — the
-only SMS ParkiPay sends now is the bill SMS, using the same
-validated/normalized number, with visible server-side logging
-(`[SMS] Meseji POST /sms/send -> HTTP ...`) if it ever fails.
+(the standard Supabase + Prisma pattern: DATABASE_URL points at the
+pgbouncer transaction pooler on port 6543 for normal app queries,
+DIRECT_URL points at the direct connection on port 5432, which
+`prisma migrate` needs because migrations don't work reliably through
+a transaction pooler.)
+
+The backend CI test job's `env:` block only set DATABASE_URL, so
+`npx prisma migrate deploy` failed schema validation with:
+    Error: Environment variable not found: DIRECT_URL.
+
+backend/.env.example didn't document DIRECT_URL at all either, so
+anyone setting up a fresh Supabase project from that template would
+hit the same error locally.
 
 WHAT THIS PATCH DOES
 ----------------------
-1. backend/src/routes/admin.js — removes the SMS send from vehicle
-   registration (`POST /api/admin/vehicles/`). The endpoint still
-   validates + normalizes + stores ownerPhone exactly as before; it
-   just no longer texts the owner at this step. Drops the now-unused
-   `sendSMS` import so ESLint's no-unused-vars doesn't flag it in CI.
-2. mobile/app/(app)/vehicles.tsx — updates a stale doc comment that
-   referenced "with SMS to owner" on the registration screen (no
-   functional UI change was needed — the mobile app never displayed
-   anything about the registration SMS in the first place).
+1. .github/workflows/backend-ci.yml — adds DIRECT_URL to the `test`
+   job's env block. CI's Postgres is a plain service container with
+   no pooler, so DIRECT_URL is set to the same connection string as
+   DATABASE_URL there — there's nothing to distinguish in that
+   environment.
+2. backend/.env.example — adds a documented DIRECT_URL line next to
+   DATABASE_URL, pointing at Supabase's direct (non-pooled, port
+   5432) connection host, with a comment on why both are needed.
 
 USAGE
 -----
 Run from the repository root (the folder containing `backend/` and
-`mobile/`):
+`.github/`):
 
-    python3 patch_remove_registration_sms.py
+    python3 patch_fix_direct_url.py
+
+AFTER RUNNING — action needed on your side (not scriptable):
+----------------------------------------------------------------
+Set DIRECT_URL as a real environment variable wherever DATABASE_URL
+is already set for local/Render use:
+  - Locally: add DIRECT_URL=... to backend/.env (get the value from
+    Supabase → Settings → Database → Connection string → "URI" under
+    the *non-pooled* / "Direct connection" tab — port 5432, NOT 6543).
+  - Render: add DIRECT_URL as an environment variable in the service
+    settings, same value.
 """
 import os
 import subprocess
@@ -82,112 +90,110 @@ def git_commit(message):
 
 
 def check_repo():
-    if not os.path.isdir(path("backend")) or not os.path.isdir(path("mobile")):
+    if not os.path.isdir(path("backend")) or not os.path.isdir(path(".github")):
         raise SystemExit(
             "This doesn't look like the ParkiPay repo root "
-            "(expected ./backend and ./mobile). Run from the repo root."
+            "(expected ./backend and ./.github). Run from the repo root."
         )
     if not os.path.isdir(path(".git")):
         raise SystemExit("Not a git repository. Run this from inside your git checkout.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STEP 1 — admin.js: drop the registration SMS
+# STEP 1 — backend-ci.yml: add DIRECT_URL to the test job env
 # ═══════════════════════════════════════════════════════════════════════════
-ADMIN_OLD_IMPORTS = """const { sendSMS } = require('../lib/sms');
-const { isValidTzMobile, normalizeTzMobile } = require('../lib/phone');
-const { authenticate } = require('../middleware/auth');"""
+CI_OLD_ENV = """    env:
+      NODE_ENV:     test
+      DATABASE_URL: postgresql://parkipay:parkipay@localhost:5432/parkipay_test
+      JWT_SECRET:   ci-test-secret-not-for-production"""
 
-ADMIN_NEW_IMPORTS = """const { isValidTzMobile, normalizeTzMobile } = require('../lib/phone');
-const { authenticate } = require('../middleware/auth');"""
-
-ADMIN_OLD_HANDLER_TAIL = """    // Invalidate any cached lookup for this plate
-    await redis.cacheDel(`vehicle:${plateNumber}`);
-
-    // Send SMS to owner with registration confirmation
-    const smsText =
-      `ParkiPay: Gari lako (${plateNumber}) limesajiliwa kwenye mfumo wa maegesho. ` +
-      `Utapokea SMS yenye maelezo kamili ya bili kila utakapotozwa maegesho. Asante!`;
-    const smsResult = await sendSMS(ownerPhone, smsText);
-    if (!smsResult.success) {
-      console.warn('[Admin] Vehicle registered but SMS failed:', smsResult.error);
-    }
-
-    res.status(201).json({ ...vehicle, smsSent: smsResult.success });"""
-
-ADMIN_NEW_HANDLER_TAIL = """    // Invalidate any cached lookup for this plate
-    await redis.cacheDel(`vehicle:${plateNumber}`);
-
-    // No SMS here by design — ParkiPay sends exactly one SMS per bill
-    // (see backend/src/routes/billing.js), not a separate registration
-    // confirmation. Keeping it to a single message avoids the owner
-    // getting two texts, and removes the silent-failure gap where a
-    // failed registration SMS previously went unnoticed by the officer.
-    res.status(201).json(vehicle);"""
+CI_NEW_ENV = """    env:
+      NODE_ENV:     test
+      # CI's Postgres is a plain service container with no pooler, so
+      # DIRECT_URL and DATABASE_URL point at the same place here —
+      # only real Supabase environments need them to differ (see
+      # backend/.env.example).
+      DATABASE_URL: postgresql://parkipay:parkipay@localhost:5432/parkipay_test
+      DIRECT_URL:   postgresql://parkipay:parkipay@localhost:5432/parkipay_test
+      JWT_SECRET:   ci-test-secret-not-for-production"""
 
 
-def step_01_admin_js():
-    print("\n[1/2] backend/src/routes/admin.js — drop registration SMS")
-    p = path("backend/src/routes/admin.js")
+def step_01_ci_direct_url():
+    print("\n[1/2] .github/workflows/backend-ci.yml — add DIRECT_URL to test job env")
+    p = path(".github/workflows/backend-ci.yml")
     text = read(p)
 
-    if "sendSMS" not in text:
+    if "DIRECT_URL" in text:
         print("  (already patched — skipping)")
         return
 
-    require_in(text, ADMIN_OLD_IMPORTS, "admin.js (imports)")
-    text = text.replace(ADMIN_OLD_IMPORTS, ADMIN_NEW_IMPORTS)
+    require_in(text, CI_OLD_ENV, "backend-ci.yml (test job env)")
+    text = text.replace(CI_OLD_ENV, CI_NEW_ENV)
 
-    require_in(text, ADMIN_OLD_HANDLER_TAIL, "admin.js (registration handler tail)")
-    text = text.replace(ADMIN_OLD_HANDLER_TAIL, ADMIN_NEW_HANDLER_TAIL)
-
-    assert "sendSMS" not in text, "sendSMS should be fully removed from admin.js"
-    assert "smsSent" not in text
+    assert "DIRECT_URL" in text
     write(p, text)
     print(f"  patched {p}")
-    git_commit(
-        "backend(admin): stop sending a registration SMS — the bill SMS is now the "
-        "only message ParkiPay sends per vehicle"
-    )
+    git_commit("ci(backend): add missing DIRECT_URL to test job env (fixes Prisma P1012)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STEP 2 — vehicles.tsx: stale doc-comment cleanup
+# STEP 2 — backend/.env.example: document DIRECT_URL
 # ═══════════════════════════════════════════════════════════════════════════
-VEHICLES_OLD_COMMENT = " * Lists all registered vehicles, allows adding new ones (with SMS to owner)"
-VEHICLES_NEW_COMMENT = " * Lists all registered vehicles, allows adding new ones"
+ENV_OLD = """# ── Database (Supabase pooler — use port 6543, not 5432) ─────────────────────
+# Settings → Database → Connection string → URI (Transaction pooler)
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"""
+
+ENV_NEW = """# ── Database (Supabase) ───────────────────────────────────────────────────────
+# Prisma needs BOTH of these — see backend/prisma/schema.prisma's
+# `url` / `directUrl`. Using the pooler for DATABASE_URL and the
+# direct connection for DIRECT_URL is Supabase's recommended setup:
+# app queries go through pgbouncer, but `prisma migrate` needs a
+# direct (non-pooled) connection to work reliably.
+#
+# DATABASE_URL — pooler, port 6543
+#   Settings → Database → Connection string → URI (Transaction pooler)
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
+#
+# DIRECT_URL — direct connection, port 5432 (used only for migrations)
+#   Settings → Database → Connection string → URI (Direct connection)
+DIRECT_URL=postgresql://postgres.[ref]:[password]@aws-0-eu-west-1.supabase.co:5432/postgres"""
 
 
-def step_02_vehicles_tsx():
-    print("\n[2/2] mobile/app/(app)/vehicles.tsx — update stale doc comment")
-    p = path("mobile/app/(app)/vehicles.tsx")
+def step_02_env_example():
+    print("\n[2/2] backend/.env.example — document DIRECT_URL")
+    p = path("backend/.env.example")
     text = read(p)
 
-    if VEHICLES_OLD_COMMENT not in text:
-        print("  (already patched or comment not found — skipping)")
+    if "DIRECT_URL" in text:
+        print("  (already patched — skipping)")
         return
 
-    text = text.replace(VEHICLES_OLD_COMMENT, VEHICLES_NEW_COMMENT)
+    require_in(text, ENV_OLD, "backend/.env.example")
+    text = text.replace(ENV_OLD, ENV_NEW)
+
+    assert "DIRECT_URL" in text
     write(p, text)
     print(f"  patched {p}")
-    git_commit("mobile(vehicles): update doc comment — registration no longer sends an SMS")
+    git_commit("backend: document DIRECT_URL in .env.example alongside DATABASE_URL")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 def main():
     check_repo()
-    print("ParkiPay patch — remove registration SMS (bill SMS only)")
+    print("ParkiPay patch — fix missing DIRECT_URL (Prisma P1012)")
     print("=" * 60)
 
-    step_01_admin_js()
-    step_02_vehicles_tsx()
+    step_01_ci_direct_url()
+    step_02_env_example()
 
     print("\n" + "=" * 60)
     print("✓ Done. Review with `git log --oneline` / `git show`.")
     print("  Push to a feature branch and open a PR (main is still protected).")
-    print("\n  Net effect: ParkiPay now sends exactly one SMS per vehicle —")
-    print("  the full bill SMS from billing.js — instead of a registration")
-    print("  text plus a separate bill text.")
+    print("\n  Still needed on your side (can't be scripted):")
+    print("  - Add DIRECT_URL to backend/.env locally (Supabase dashboard ->")
+    print("    Settings -> Database -> Connection string -> Direct connection,")
+    print("    port 5432 — NOT the pooler on 6543).")
+    print("  - Add DIRECT_URL as an env var on Render too, same value.")
 
 
 if __name__ == "__main__":
