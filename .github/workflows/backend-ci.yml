@@ -102,7 +102,12 @@ jobs:
 
     env:
       NODE_ENV:     test
+      # CI's Postgres is a plain service container with no pooler, so
+      # DIRECT_URL and DATABASE_URL point at the same place here —
+      # only real Supabase environments need them to differ (see
+      # backend/.env.example).
       DATABASE_URL: postgresql://parkipay:parkipay@localhost:5432/parkipay_test
+      DIRECT_URL:   postgresql://parkipay:parkipay@localhost:5432/parkipay_test
       JWT_SECRET:   ci-test-secret-not-for-production
 
     steps:
